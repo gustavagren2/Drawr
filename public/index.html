@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Draw & Guess – Multiplayer</title>
+<style>
+  :root { --bg:#0b0f1a; --panel:#0f1528; --panel2:#0b1120; --ink:#e8eefc; --brand:#7ab8ff; --danger:#ff6b6b; }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--ink); font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; }
+  .wrap { display:grid; grid-template-rows:auto 1fr; height:100%; }
+  header { display:flex; gap:12px; align-items:center; padding:10px 12px; background:linear-gradient(180deg,#0e1430,#0a0f22); border-bottom:1px solid rgba(150,180,255,.2); }
+  header .title { font-weight:700; letter-spacing:.3px; }
+  header .room { margin-left:auto; font-size:13px; opacity:.9; }
+  header .btn { margin-left:12px; padding:6px 10px; background:rgba(18,24,48,.6); border:1px solid rgba(150,180,255,.3); border-radius:8px; cursor:pointer; color:var(--ink);}
+  main { display:grid; grid-template-columns:320px 1fr 320px; gap:12px; padding:12px; }
+  .panel { background:var(--panel); border:1px solid rgba(150,180,255,.18); border-radius:10px; overflow:hidden; display:flex; flex-direction:column; }
+  .panel header { padding:8px 10px; background:var(--panel2); border-bottom:1px solid rgba(150,180,255,.18); }
+  .panel .body { padding:10px; flex:1; overflow:auto; }
+  .panel .foot { padding:10px; border-top:1px solid rgba(150,180,255,.18); display:flex; gap:8px; }
+  .input, .btn2 { border-radius:8px; border:1px solid rgba(150,180,255,.3); background:#0b1022; color:var(--ink); padding:8px 10px; }
+  .btn2 { background:#0e1540; cursor:pointer; }
+  .row { display:flex; gap:8px; align-items:center; }
+  .list { list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:6px; }
+  .chip { padding:4px 8px; background:#0c1228; border:1px solid rgba(150,180,255,.2); border-radius:6px; display:inline-flex; gap:6px; align-items:center; }
+  .ready { width:8px; height:8px; border-radius:50%; background:#5fff87; display:inline-block; }
+  .notready { background:#666; }
+  .canvasWrap { background:var(--panel); border:1px solid rgba(150,180,255,.18); border-radius:10px; display:grid; grid-template-rows:auto 1fr auto; overflow:hidden; }
+  .toolbar { display:flex; gap:8px; padding:8px; background:var(--panel2); border-bottom:1px solid rgba(150,180,255,.18); align-items:center; }
+  #board { background:#0a0f1e; display:block; width:100%; height:100%; }
+  .slots { letter-spacing:8px; font-size:24px; text-align:center; padding:8px; background:#0b1120; border-top:1px solid rgba(150,180,255,.2); }
+  .timer { font-weight:700; }
+  .mask { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+  .choices { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+  .choice { padding:8px 10px; background:#162044; border:1px solid rgba(150,180,255,.35); border-radius:8px; cursor:pointer; }
+  .leader li { display:flex; justify-content:space-between; gap:10px; }
+  .correctList { display:flex; gap:6px; flex-wrap:wrap; }
+  .modal { position:fixed; inset:0; display:none; place-items:center; background:rgba(0,0,0,.55); }
+  .modal .card { width:min(520px, calc(100vw - 32px)); background:var(--panel); border:1px solid rgba(150,180,255,.28); border-radius:12px; padding:16px; }
+  .hint { color:#d1ffea; } .correct { color:#56ffa9; } .me { color:#ffd166; } .small { font-size:12px; opacity:.85; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="title">✏️ Draw & Guess</div>
+    <div class="room">Room: <span id="roomId">—</span></div>
+    <button id="btnStart" class="btn2">Start Game (host)</button>
+    <button id="btnAgain" class="btn2" style="display:none;">Play again</button>
+  </header>
+  <main>
+    <section class="panel" id="leftPanel">
+      <header>Lobby</header>
+      <div class="body" id="lobbyBody">
+        <div class="row" style="margin-bottom:10px;">
+          <input id="inpName" class="input" placeholder="Your name" />
+          <button id="btnSetName" class="btn2">Set</button>
+          <label class="chip"><input type="checkbox" id="chkReady" /> Ready</label>
+        </div>
+        <div><strong>Players</strong></div>
+        <ul id="players" class="list"></ul>
+
+        <hr style="border-color:rgba(150,180,255,.15); border-style:solid; border-width:0 0 1px; margin:12px 0;">
+        <div><strong>Chat</strong></div>
+        <div id="chat" style="height:160px; overflow:auto; background:#0a0f1e; border:1px solid rgba(150,180,255,.18); border-radius:8px; padding:8px;"></div>
+        <div class="row" style="margin-top:8px;">
+          <input id="inpChat" class="input" placeholder="Message…" style="flex:1;" />
+          <button id="btnChat" class="btn2">Send</button>
+        </div>
+      </div>
+
+      <div class="body" id="roundSidebar" style="display:none;">
+        <div class="row" style="justify-content:space-between;">
+          <div><strong>Round</strong> <span id="roundIndex">1</span></div>
+          <div class="timer">⏱ <span id="secondsLeft">60</span>s</div>
+        </div>
+        <div style="margin-top:10px;">Word: <span class="mask" id="masked">_ _ _ _</span></div>
+        <div class="small hint" id="hintInfo" style="margin-top:6px;">Hints at 30/40/50s</div>
+        <div style="margin-top:12px;"><strong>Correct guessers</strong></div>
+        <div id="correctList" class="correctList"></div>
+        <div style="margin-top:12px;"><strong>Leaderboard</strong></div>
+        <ul id="leader" class="list leader"></ul>
+      </div>
+      <div class="foot small"><span>Host can start when ready. Max 12 players.</span></div>
+    </section>
+
+    <section class="canvasWrap">
+      <div class="toolbar">
+        <div>Drawer: <span id="drawerName">—</span></div>
+        <div style="margin-left:auto;">Pen size:
+          <button class="btn2" id="penMinus">-</button>
+          <span id="penSize" class="chip">6</span>
+          <button class="btn2" id="penPlus">+</button>
+        </div>
+        <div style="margin-left:8px;">Color: <input type="color" id="penColor" value="#ffffff" /></div>
+        <button class="btn2" id="btnClear" style="margin-left:8px;">Clear</button>
+      </div>
+      <canvas id="board"></canvas>
+      <div class="slots" id="slotsWrap"><input id="guessInput" class="input" style="width:100%; font-size:22px; text-align:center;" placeholder="Type your guess and press Enter…" /></div>
+    </section>
+
+    <section class="panel"><header>Leaderboard</header><div class="body"><ul id="leader2" class="list leader"></ul></div></section>
+  </main>
+</div>
+
+<div class="modal" id="modalChoices"><div class="card"><h3>Choose a word to draw (60s)</h3><div class="choices" id="choiceList"></div><div class="small" style="margin-top:8px;">Pick one. Others will only see blanks.</div></div></div>
+<div class="modal" id="modalOver"><div class="card"><h2>Game Over 🎉</h2><p>Winner: <strong id="winnerName">—</strong></p><ul id="finalBoard" class="list leader" style="margin-top:8px;"></ul><div style="margin-top:12px;"><button id="btnAgainModal" class="btn2">Play again</button></div></div></div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+(() => {
+  const urlParams = new URLSearchParams(location.search);
+  let room = urlParams.get("room"); if(!room){ room = Math.random().toString(36).slice(2,8); urlParams.set("room", room); history.replaceState(null,"","?"+urlParams.toString()); }
+  const socket = io({ query:{ room } });
+
+  let me={id:null, hostId:null}, players=[], leaderboard={}, state="lobby";
+  let drawerId=null, amDrawer=false, secondsLeft=60, masked="", correctSet=new Set();
+
+  const roomIdEl = document.getElementById("roomId");
+  const btnStart = document.getElementById("btnStart");
+  const btnAgain = document.getElementById("btnAgain");
+  const playersEl = document.getElementById("players");
+  const leader = document.getElementById("leader"), leader2 = document.getElementById("leader2");
+  const chatEl = document.getElementById("chat"), inpChat = document.getElementById("inpChat"), btnChat = document.getElementById("btnChat");
+  const inpName = document.getElementById("inpName"), btnSetName = document.getElementById("btnSetName"), chkReady = document.getElementById("chkReady");
+  const secondsLeftEl = document.getElementById("secondsLeft"), maskedEl = document.getElementById("masked"),
+        drawerNameEl = document.getElementById("drawerName"), roundIndexEl = document.getElementById("roundIndex"),
+        correctListEl = document.getElementById("correctList"), leftLobbyBody = document.getElementById("lobbyBody"),
+        leftRoundSidebar = document.getElementById("roundSidebar");
+
+  const board = document.getElementById("board"); const ctx = board.getContext("2d");
+  let drawing=false, penSize=6, penColor="#ffffff";
+  const penMinus = document.getElementById("penMinus"), penPlus = document.getElementById("penPlus"),
+        penSizeEl = document.getElementById("penSize"), penColorEl = document.getElementById("penColor"),
+        btnClear = document.getElementById("btnClear");
+  const guessInput = document.getElementById("guessInput");
+  const modalChoices = document.getElementById("modalChoices"); const choiceList = document.getElementById("choiceList");
+  const modalOver = document.getElementById("modalOver"); const winnerName = document.getElementById("winnerName");
+  const finalBoard = document.getElementById("finalBoard"); const btnAgainModal = document.getElementById("btnAgainModal");
+
+  function resize(){ board.width = board.clientWidth * devicePixelRatio; board.height = board.clientHeight * devicePixelRatio; ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0); clearCanvas(); }
+  new ResizeObserver(resize).observe(board);
+  function clearCanvas(){ ctx.fillStyle="#0a0f1e"; ctx.fillRect(0,0,board.clientWidth, board.clientHeight); }
+  roomIdEl.textContent = room;
+
+  btnChat.onclick = ()=>{ const text=inpChat.value.trim(); if(!text) return; socket.emit("chat:send",{text}); inpChat.value=""; };
+  inpChat.addEventListener("keydown", e=>{ if(e.key==="Enter") btnChat.click(); });
+  btnSetName.onclick = ()=>{ const name=inpName.value.trim().slice(0,24); if(!name) return; socket.emit("player:setName",{name}); };
+  chkReady.onchange = ()=> socket.emit("player:ready",{ready: chkReady.checked});
+  btnStart.onclick = ()=> socket.emit("game:start");
+  btnAgain.onclick = ()=> socket.emit("play:again");
+  btnAgainModal.onclick = ()=>{ socket.emit("play:again"); modalOver.style.display="none"; };
+
+  penMinus.onclick = ()=>{ penSize=Math.max(2,penSize-2); penSizeEl.textContent=penSize; };
+  penPlus.onclick = ()=>{ penSize=Math.min(40,penSize+2); penSizeEl.textContent=penSize; };
+  penColorEl.oninput = e=> penColor = e.target.value;
+  btnCl
