@@ -23,6 +23,8 @@
   #viewport{position:fixed;inset:0;display:none;background:#000}
   #hud{position:fixed;left:12px;bottom:12px;display:none;background:rgba(10,16,38,.6);border:1px solid rgba(150,180,255,.25);padding:8px 10px;border-radius:12px;font-size:13px}
   #fps{position:fixed;right:12px;bottom:12px;display:none;background:rgba(10,16,38,.6);border:1px solid rgba(150,180,255,.25);padding:6px 8px;border-radius:8px;font-size:12px}
+  #compass{position:fixed;left:50%;top:12px;translate:-50% 0;background:rgba(10,16,38,.6);border:1px solid rgba(150,180,255,.25);padding:6px 10px;border-radius:999px;font-size:13px;display:none}
+  #hint{position:fixed;left:50%;bottom:50%;translate:-50% 50%;font-size:14px;opacity:.75;display:none}
 </style>
 </head>
 <body>
@@ -59,22 +61,19 @@
     <section class="panel" style="grid-template-rows:auto 1fr">
       <header>Preview</header>
       <div class="body">
-        <p>Choose your name & plane color, ready up, then the host will start.</p>
-        <p>Controls (in flight):</p>
+        <p>Controls:</p>
         <ul>
-          <li>Mouse — pitch/roll (pointer lock)</li>
-          <li>Q / E — yaw</li>
-          <li>W / S — throttle up/down</li>
-          <li>Shift — boost, Ctrl — brake</li>
-          <li>Esc — unlock pointer</li>
+          <li>Arrow Up/Down — pitch</li>
+          <li>Arrow Left/Right — yaw (auto roll level)</li>
+          <li>Space — boost</li>
         </ul>
+        <p>Host starts when all are ready.</p>
       </div>
     </section>
     <section class="panel">
       <header>Tips</header>
       <div class="body">
-        <p>Performance-safe: dynamic resolution, low-poly, snapshots at ~12 Hz, client-side interpolation.</p>
-        <p>Fullscreen starts after lobby.</p>
+        <p>Performance: low-poly, fog, capped DPR, snapshots ~12 Hz with client interpolation.</p>
       </div>
     </section>
   </main>
@@ -82,8 +81,10 @@
 
 <!-- Fullscreen 3D -->
 <div id="viewport"></div>
-<div id="hud">SPD <span id="spd">0</span> | ALT <span id="alt">0</span> | YAW <span id="yaw">0</span></div>
+<div id="hud">SPD <span id="spd">0</span> | ALT <span id="alt">0</span></div>
 <div id="fps">FPS —</div>
+<div id="compass">HDG <span id="hdg">000</span>° | <span id="card">N</span></div>
+<div id="hint">↑↓ pitch • ←→ yaw • SPACE boost</div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
@@ -92,7 +93,7 @@
   // ====== SOCKET / ROOM ======
   const url = new URL(location.href);
   const room = url.searchParams.get("room") || "airfield";
-  if(!url.searchParams.get("room")) { url.searchParams.set("room", room); history.replaceState(null,"",url.toString()); }
+  if(!url.searchParams.get("room")){ url.searchParams.set("room", room); history.replaceState(null,"",url.toString()); }
   const socket = io({ query:{ room }, transports:["websocket"], upgrade:true });
 
   let me={ id:null, hostId:null };
@@ -106,10 +107,9 @@
   const chatEl = document.getElementById("chat");
   const inpChat = document.getElementById("inpChat");
   const btnChat = document.getElementById("btnChat");
-
   roomIdEl.textContent = room;
 
-  btnSet.onclick = ()=> socket.emit("player:set", { name: (inpName.value||"").slice(0,24), color: inpColor.value });
+  btnSet.onclick = ()=> socket.emit("player:set", { name:(inpName.value||"").slice(0,24), color: inpColor.value });
   chkReady.onchange = ()=> socket.emit("player:ready", { ready: chkReady.checked });
   btnChat.onclick = ()=>{ const text=(inpChat.value||"").trim(); if(!text) return; socket.emit("chat:send",{text}); inpChat.value=""; };
   inpChat.addEventListener("keydown", e=>{ if(e.key==="Enter") btnChat.click(); });
@@ -123,15 +123,15 @@
     me.hostId = p.hostId;
     playersEl.innerHTML = "";
     (p.players||[]).forEach(pl=>{
-      const li = document.createElement("li");
+      const li=document.createElement("li");
       li.innerHTML = `<span class="chip" style="background:${pl.color}"></span> <strong>${esc(pl.name)}</strong> ${pl.id===p.hostId?'<span class="chip">Host</span>':''} ${pl.ready?'<span class="chip">Ready</span>':''}`;
       playersEl.appendChild(li);
     });
     btnStart.style.display = (p.state==="lobby" && me.id===p.hostId) ? "" : "none";
   });
   socket.on("chat:new", ({name,text})=>{
-    const div = document.createElement("div");
-    div.innerHTML = `<strong>${esc(name)}:</strong> ${esc(text)}`;
+    const div=document.createElement("div");
+    div.innerHTML=`<strong>${esc(name)}:</strong> ${esc(text)}`;
     chatEl.appendChild(div); chatEl.scrollTop = chatEl.scrollHeight;
   });
   socket.on("game:start", ()=> enterWorld());
@@ -140,239 +140,259 @@
 
   // ====== WORLD (THREE) ======
   let renderer, scene, camera, clock;
-  let DPR = Math.min(1.5, devicePixelRatio || 1); // cap DPR for perf
-  let local = {
-    obj: null, // THREE.Object3D for my plane
-    color: "#7ab8ff",
-    speed: 30,
-    yaw: 0, pitch: 0, roll: 0
-  };
-  const peers = new Map(); // id -> {obj,color,last:{x,y,z,q...}, blend}
-  let keys = { w:false, s:false, q:false, e:false, shift:false, ctrl:false };
-  let mouse = { dx:0, dy:0, active:false };
-  let lastSend = 0;
-
-  // HUD
+  let DPR = Math.min(1.5, devicePixelRatio||1);
+  const viewport = document.getElementById("viewport");
   const hud = document.getElementById("hud");
+  const fpsEl = document.getElementById("fps");
+  const compassEl = document.getElementById("compass");
+  const hdgEl = document.getElementById("hdg");
+  const cardEl = document.getElementById("card");
+  const hintEl = document.getElementById("hint");
   const spdEl = document.getElementById("spd");
   const altEl = document.getElementById("alt");
-  const yawEl = document.getElementById("yaw");
-  const fpsEl = document.getElementById("fps");
+
+  let local = { obj:null, color:"#7ab8ff", speed: 40, yaw:0, pitch:0, roll:0 };
+  const peers = new Map(); // id -> {obj,last}
+
+  const keys = { ArrowUp:false, ArrowDown:false, ArrowLeft:false, ArrowRight:false, Space:false };
+  window.addEventListener("keydown", (e)=>{ if(e.repeat) return; if(e.key in keys){ keys[e.key]=true; e.preventDefault(); } });
+  window.addEventListener("keyup",   (e)=>{ if(e.key in keys){ keys[e.key]=false; e.preventDefault(); } });
 
   function enterWorld(){
     document.getElementById("lobbyScreen").style.display="none";
-    const vp = document.getElementById("viewport");
-    vp.style.display="block"; hud.style.display="block"; fpsEl.style.display="block";
+    viewport.style.display="block"; hud.style.display="block"; fpsEl.style.display="block"; compassEl.style.display="block"; hintEl.style.display="block";
+    setTimeout(()=> hintEl.style.display="none", 4000);
 
     renderer = new THREE.WebGLRenderer({ antialias:false, powerPreference:"high-performance" });
     renderer.setPixelRatio(DPR);
     renderer.setSize(innerWidth, innerHeight);
-    vp.appendChild(renderer.domElement);
+    viewport.appendChild(renderer.domElement);
 
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x06223f);
-    // gradient sky as fog
     scene.fog = new THREE.FogExp2(0x06223f, 0.002);
 
     camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 5000);
-    camera.position.set(0, 2, -8);
 
-    // Lights (cheap)
+    // Lighting & sky
     scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-    const dir = new THREE.DirectionalLight(0xffffff, 0.7);
-    dir.position.set(5,10,5);
-    scene.add(dir);
+    const sun = new THREE.DirectionalLight(0xffffff, 0.8); sun.position.set(20,50,10); scene.add(sun);
 
-    // Ground grid (really cheap)
-    const grid = new THREE.GridHelper(2000, 40, 0x0b4, 0x0b4);
-    grid.material.opacity = 0.15; grid.material.transparent = true;
-    scene.add(grid);
+    // Orientation aids
+    addWorldOrientation(scene);
 
-    // Build my plane
+    // My “cube plane”
     local.color = inpColor.value || "#7ab8ff";
-    local.obj = makePlane(local.color);
+    local.obj = makeCubePlane(local.color);
+    local.obj.position.set(0, 80, 0);
     scene.add(local.obj);
 
-    // Camera follow rig
+    // Camera follow boom
     const rig = new THREE.Object3D();
-    rig.position.set(0,0,0);
     local.obj.add(rig);
     rig.add(camera);
-    camera.position.set(0, 2.2, -8);
-    camera.lookAt(new THREE.Vector3(0,0,10));
+    camera.position.set(-0.2, 2.2, -10);
+    camera.lookAt(new THREE.Vector3(10,0,0)); // forward is +X
 
     clock = new THREE.Clock();
 
-    // Pointer lock for mouse flight
-    renderer.domElement.addEventListener("click", ()=>{
-      if(document.pointerLockElement !== renderer.domElement){
-        renderer.domElement.requestPointerLock();
-        document.documentElement.requestFullscreen().catch(()=>{});
-      }
-    });
-    document.addEventListener("pointerlockchange", ()=>{ mouse.active = (document.pointerLockElement === renderer.domElement); });
-    document.addEventListener("mousemove", (e)=>{
-      if(!mouse.active) return;
-      mouse.dx += e.movementX;
-      mouse.dy += e.movementY;
-    });
-
-    // Keys
-    window.addEventListener("keydown", (e)=>{ if(e.repeat) return; handleKey(e.key.toLowerCase(), true); });
-    window.addEventListener("keyup",   (e)=>{ handleKey(e.key.toLowerCase(), false); });
-    function handleKey(k,down){
-      if(k==='w') keys.w=down; if(k==='s') keys.s=down;
-      if(k==='q') keys.q=down; if(k==='e') keys.e=down;
-      if(k==='shift') keys.shift=down; if(k==='control') keys.ctrl=down;
-    }
-
-    // Networking: receive snapshots
+    // Networking snapshots
     socket.on("state:snapshot", (arr)=>{
-      // ensure we have objects for peers
       const ids = new Set(arr.map(a=>a.id));
       for(const a of arr){
-        if(a.id===me.id) continue; // we simulate locally
+        if(a.id===me.id) continue;
         let o = peers.get(a.id);
         if(!o){
-          const obj = makePlane(a.color||"#7ab8ff");
+          const obj = makeCubePlane(a.color||"#7ab8ff");
           scene.add(obj);
-          o = { obj, color:a.color||"#7ab8ff", last:a, blend:0 };
+          o = { obj, last:a };
           peers.set(a.id, o);
+          obj.position.set(a.x,a.y,a.z);
+          obj.quaternion.set(a.qx,a.qy,a.qz,a.qw);
         } else {
-          o.color = a.color||o.color;
           o.last = a;
-          o.blend = 0; // reset interpolation blend
         }
       }
-      // cleanup missing peers
       for(const [id,o] of peers){
         if(!ids.has(id)){ scene.remove(o.obj); peers.delete(id); }
       }
     });
 
-    // Start loop
     tick();
   }
 
-  function makePlane(color="#7ab8ff"){
-    // Low-poly plane: fuselage + wings + tail
-    const group = new THREE.Object3D();
-    const mat = new THREE.MeshStandardMaterial({ color, metalness:0.1, roughness:0.8 });
-    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.6, 3.2, 2, 8), mat);
-    body.rotation.z = Math.PI/2;
-    group.add(body);
-    const wing = new THREE.Mesh(new THREE.BoxGeometry(0.2, 5, 0.05), mat);
-    wing.position.set(0,0,0);
-    group.add(wing);
-    const tail = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.4, 0.6), mat);
-    tail.position.set(-1.8, 0.4, 0);
-    group.add(tail);
-    const prop = new THREE.Mesh(new THREE.BoxGeometry(0.05, 1, 0.05), new THREE.MeshStandardMaterial({ color:"#fff" }));
-    prop.position.set(2.0,0,0);
-    group.add(prop);
-    group.userData.prop = prop;
-    return group;
+  function makeCubePlane(color="#7ab8ff"){
+    const g = new THREE.Object3D();
+    const mat = new THREE.MeshStandardMaterial({ color, metalness:0.1, roughness:0.85 });
+
+    // body (cube)
+    const body = new THREE.Mesh(new THREE.BoxGeometry(3, 1, 1), mat); // X forward
+    g.add(body);
+
+    // wings (cubes)
+    const wing = new THREE.Mesh(new THREE.BoxGeometry(0.3, 6, 0.3), mat);
+    wing.position.set(0, 0, 0);
+    g.add(wing);
+
+    // tail (cube)
+    const tail = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1.8, 0.4), mat);
+    tail.position.set(-1.6, 0.6, 0);
+    g.add(tail);
+
+    // actuators (little cubes on wingtips + tail tip)
+    const actMat = new THREE.MeshStandardMaterial({ color:"#fff", roughness:0.6 });
+    const a1 = new THREE.Mesh(new THREE.BoxGeometry(0.25,0.25,0.25), actMat); a1.position.set(0, 3.2, 0); g.add(a1);
+    const a2 = new THREE.Mesh(new THREE.BoxGeometry(0.25,0.25,0.25), actMat); a2.position.set(0,-3.2, 0); g.add(a2);
+    const a3 = new THREE.Mesh(new THREE.BoxGeometry(0.25,0.25,0.25), actMat); a3.position.set(-2.2, 1.2, 0); g.add(a3);
+
+    // “propeller” cube in front
+    const prop = new THREE.Mesh(new THREE.BoxGeometry(0.15,1.2,0.15), new THREE.MeshStandardMaterial({color:"#eee"}));
+    prop.position.set(1.7,0,0);
+    g.add(prop);
+    g.userData.prop = prop;
+
+    return g;
   }
 
-  // Simple flight model (arcade)
+  function addWorldOrientation(scene){
+    // Ground grid
+    const grid = new THREE.GridHelper(4000, 80, 0x1e90ff, 0x1e90ff);
+    grid.material.opacity = 0.15; grid.material.transparent = true;
+    scene.add(grid);
+
+    // Axis beams at origin
+    const xBeam = new THREE.Mesh(new THREE.BoxGeometry(1000, 0.5, 0.5), new THREE.MeshBasicMaterial({color:0xff5555}));
+    xBeam.position.set(500, 0.25, 0); scene.add(xBeam); // +X (east)
+    const zBeam = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 1000), new THREE.MeshBasicMaterial({color:0x55ff55}));
+    zBeam.position.set(0, 0.25, 500); scene.add(zBeam); // +Z (south-ish for orientation)
+    const yBeam = new THREE.Mesh(new THREE.BoxGeometry(0.5, 400, 0.5), new THREE.MeshBasicMaterial({color:0xaaaaaa}));
+    yBeam.position.set(0, 200, 0); scene.add(yBeam);
+
+    // Cardinal pylons with labels
+    const pylons = [
+      { pos:[ 0, 0, -800], color:0x00bfff, label:'N' },
+      { pos:[ 800,0, 0],   color:0xff6b6b, label:'E' },
+      { pos:[ 0, 0, 800],  color:0x22c55e, label:'S' },
+      { pos:[-800,0, 0],   color:0xf59e0b, label:'W' },
+    ];
+    const textMat = new THREE.MeshBasicMaterial({color:0xffffff});
+    pylons.forEach(p=>{
+      const col = new THREE.Mesh(new THREE.BoxGeometry(20, 200, 20), new THREE.MeshStandardMaterial({color:p.color, roughness:1}));
+      col.position.set(p.pos[0], 100, p.pos[2]);
+      scene.add(col);
+      // label (simple billboard plane)
+      const label = new THREE.Mesh(new THREE.PlaneGeometry(60,60), new THREE.MeshBasicMaterial({color:0xffffff}));
+      label.position.set(p.pos[0], 240, p.pos[2]);
+      label.userData.billboard=true;
+      label.userData.text=p.label;
+      scene.add(label);
+      // tiny beacon light
+      const bulb = new THREE.Mesh(new THREE.SphereGeometry(6,8,8), new THREE.MeshBasicMaterial({color:p.color}));
+      bulb.position.set(p.pos[0], 210, p.pos[2]);
+      scene.add(bulb);
+    });
+  }
+
+  // Flight model (keyboard only)
+  let lastSend = 0;
   function simulateLocal(dt){
-    // Mouse controls -> pitch/roll
-    const sens = 0.0018;
-    const yawRate = 0.6; // rad/s from Q/E
-    local.pitch = THREE.MathUtils.clamp(local.pitch - mouse.dy*sens, -1.0, 1.0);
-    local.roll  = THREE.MathUtils.clamp(local.roll  - mouse.dx*sens, -1.0, 1.0);
-    mouse.dx = mouse.dy = 0;
+    // Inputs
+    const pitchIn = (keys.ArrowUp? 1:0) + (keys.ArrowDown? -1:0);  // Up = pitch up
+    const yawIn   = (keys.ArrowRight? 1:0) + (keys.ArrowLeft? -1:0);
+    const boost   = keys.Space? 1:0;
 
-    // Yaw
-    let yawInput = 0; if(keys.q) yawInput -= 1; if(keys.e) yawInput += 1;
-    local.yaw += yawInput * yawRate * dt;
+    // Speeds
+    const accel = 25*boost - 8*(1-boost); // hold space to accelerate, otherwise gentle decay
+    local.speed = THREE.MathUtils.clamp(local.speed + accel*dt, 10, 140);
 
-    // Throttle
-    const accel = (keys.w? 20:0) - (keys.s? 20:0);
-    local.speed = THREE.MathUtils.clamp(local.speed + accel*dt, 10, 120);
-    if(keys.shift) local.speed = Math.min(140, local.speed + 20*dt);
-    if(keys.ctrl)  local.speed = Math.max(5, local.speed - 30*dt);
-
-    // Apply orientation
+    // Apply orientation (roll auto-levels toward 0)
     const obj = local.obj;
-    // Smooth orientation toward inputs
-    obj.rotateZ(local.roll * 1.8 * dt);     // roll
-    obj.rotateX(local.pitch * 1.4 * dt);    // pitch
-    obj.rotateY(local.yaw * 1.2 * dt);      // yaw (relative)
+    obj.rotateX(pitchIn * 0.9 * dt);   // pitch about local X (remember our +X is forward; but geometry is X-forward, so rotate Z/Y carefully)
+    obj.rotateY(yawIn   * 1.2 * dt);   // yaw about local Y
+    // Auto-level roll toward 0
+    const e = new THREE.Euler().setFromQuaternion(obj.quaternion, "ZYX");
+    obj.rotateZ(-e.z * 0.8 * dt);
 
-    // Move forward along -Z of object? Our body is X-forward due to geometry; align:
+    // Move forward along +X
     const forward = new THREE.Vector3(1,0,0).applyQuaternion(obj.quaternion);
     obj.position.addScaledVector(forward, local.speed * dt);
 
-    // keep above ground
+    // Keep above “ground”
     if(obj.position.y < 20) obj.position.y = 20;
 
-    // spin prop
-    const prop = obj.userData.prop; if(prop) prop.rotation.x += dt*20;
+    // Spin prop
+    const prop = obj.userData.prop; if(prop) prop.rotation.x += dt*30;
 
-    // Update HUD
+    // HUD
     spdEl.textContent = local.speed.toFixed(0);
     altEl.textContent = Math.max(0, obj.position.y|0);
-    // yaw approx from quaternion
+
+    // Compass
     const eul = new THREE.Euler().setFromQuaternion(obj.quaternion, "YXZ");
-    yawEl.textContent = THREE.MathUtils.radToDeg(eul.y).toFixed(0);
+    let deg = THREE.MathUtils.radToDeg(eul.y); // heading
+    deg = (deg%360+360)%360;
+    hdgEl.textContent = deg.toFixed(0).padStart(3,'0');
+    cardEl.textContent = ['N','NE','E','SE','S','SW','W','NW'][Math.round(deg/45)%8];
+
+    // Send my state ~12 Hz
+    const now = performance.now();
+    if(now - lastSend > 80){
+      lastSend = now;
+      const q = obj.quaternion, p = obj.position;
+      socket.emit("state:update", {
+        x:+p.x.toFixed(2), y:+p.y.toFixed(2), z:+p.z.toFixed(2),
+        qx:+q.x.toFixed(4), qy:+q.y.toFixed(4), qz:+q.z.toFixed(4), qw:+q.w.toFixed(4),
+        s:+local.speed.toFixed(1)
+      });
+    }
   }
 
-  // Interpolate peers toward last snapshot
+  // Peer interpolation
   const tmpQ = new THREE.Quaternion(), curQ = new THREE.Quaternion();
   function simulatePeers(dt){
     for(const o of peers.values()){
       if(!o.last) continue;
-      // position
       const p = o.obj.position;
       p.x += (o.last.x - p.x) * Math.min(1, dt*6);
       p.y += (o.last.y - p.y) * Math.min(1, dt*6);
       p.z += (o.last.z - p.z) * Math.min(1, dt*6);
-      // rotation slerp
       tmpQ.set(o.last.qx, o.last.qy, o.last.qz, o.last.qw).normalize();
       curQ.copy(o.obj.quaternion);
       curQ.slerp(tmpQ, Math.min(1, dt*6));
       o.obj.quaternion.copy(curQ);
-      // prop spin
-      const prop = o.obj.userData.prop; if(prop) prop.rotation.x += dt*20;
+      const prop = o.obj.userData.prop; if(prop) prop.rotation.x += dt*30;
     }
   }
 
-  // Networking: send my state at ~12 Hz
-  function maybeSend(now){
-    if(now - lastSend < 80) return;
-    lastSend = now;
-    const q = local.obj.quaternion;
-    const p = local.obj.position;
-    socket.emit("state:update", {
-      x:+p.x.toFixed(2), y:+p.y.toFixed(2), z:+p.z.toFixed(2),
-      qx:+q.x.toFixed(4), qy:+q.y.toFixed(4), qz:+q.z.toFixed(4), qw:+q.w.toFixed(4),
-      s:+local.speed.toFixed(1)
+  // Billboard labels face camera
+  function updateBillboards(){
+    scene.traverse(obj=>{
+      if(obj.userData && obj.userData.billboard){
+        obj.lookAt(camera.position);
+      }
     });
   }
 
-  // Render loop with dynamic resolution
+  // Render loop + dynamic res
   let frameCount=0, acc=0, fps=60;
   function tick(){
-    const dt = Math.min(0.05, clock.getDelta()); // clamp dt to avoid spikes
+    const dt = Math.min(0.05, (clock?clock.getDelta():0.016));
     acc += dt; frameCount++;
     if(acc>=1){ fps = frameCount; frameCount=0; acc=0; fpsEl.textContent = `FPS ${fps}`; }
-    // Dynamic resolution scale if FPS too low/high
     if(fps < 45 && DPR > 1){ DPR = Math.max(1, DPR - 0.05); renderer.setPixelRatio(DPR); }
     else if(fps > 70 && DPR < (devicePixelRatio||1)){ DPR = Math.min(devicePixelRatio||1, DPR + 0.05); renderer.setPixelRatio(DPR); }
 
     if(local.obj){
       simulateLocal(dt);
       simulatePeers(dt);
-      // place camera a bit behind local plane (already parented)
-      maybeSend(performance.now());
+      updateBillboards();
     }
 
     renderer.render(scene, camera);
     requestAnimationFrame(tick);
   }
 
-  // handle resize
+  // Resize
   window.addEventListener("resize", ()=>{
     if(!renderer) return;
     renderer.setSize(innerWidth, innerHeight);
