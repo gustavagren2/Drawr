@@ -1,7 +1,7 @@
 {
-  "name": "minigolf-party",
+  "name": "airparty-3d",
   "version": "1.0.0",
-  "description": "Multiplayer HTML5 Minigolf",
+  "description": "Multiplayer 3D airplanes (Three.js + Socket.IO)",
   "type": "module",
   "main": "server.js",
   "scripts": {
@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "express": "^4.19.2",
-    "socket.io": "^4.7.5"
+    "socket.io": "^4.7.5",
+    "compression": "^1.7.4"
   }
 }

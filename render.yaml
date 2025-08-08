@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: minigolf-game
+    name: airparty-3d
     env: node
     buildCommand: npm install
     startCommand: node server.js
