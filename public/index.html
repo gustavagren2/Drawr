@@ -5,20 +5,19 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Draw & Guess – Multiplayer</title>
 <style>
-  :root { --bg:#0b0f1a; --panel:#0f1528; --panel2:#0b1120; --ink:#e8eefc; --brand:#7ab8ff; --danger:#ff6b6b; }
+  :root { --bg:#0b0f1a; --panel:#0f1528; --panel2:#0b1120; --ink:#e8eefc; --brand:#7ab8ff; }
   html, body { margin:0; height:100%; background:var(--bg); color:var(--ink); font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; }
   .wrap { display:grid; grid-template-rows:auto 1fr; height:100%; }
   header { display:flex; gap:12px; align-items:center; padding:10px 12px; background:linear-gradient(180deg,#0e1430,#0a0f22); border-bottom:1px solid rgba(150,180,255,.2); }
-  header .title { font-weight:700; letter-spacing:.3px; }
+  header .title { font-weight:700; }
   header .room { margin-left:auto; font-size:13px; opacity:.9; }
-  header .btn { margin-left:12px; padding:6px 10px; background:rgba(18,24,48,.6); border:1px solid rgba(150,180,255,.3); border-radius:8px; cursor:pointer; color:var(--ink);}
+  header .btn { margin-left:8px; padding:6px 10px; background:#0e1540; border:1px solid rgba(150,180,255,.3); border-radius:8px; color:var(--ink); cursor:pointer; }
   main { display:grid; grid-template-columns:320px 1fr 320px; gap:12px; padding:12px; }
   .panel { background:var(--panel); border:1px solid rgba(150,180,255,.18); border-radius:10px; overflow:hidden; display:flex; flex-direction:column; }
   .panel header { padding:8px 10px; background:var(--panel2); border-bottom:1px solid rgba(150,180,255,.18); }
   .panel .body { padding:10px; flex:1; overflow:auto; }
   .panel .foot { padding:10px; border-top:1px solid rgba(150,180,255,.18); display:flex; gap:8px; }
-  .input, .btn2 { border-radius:8px; border:1px solid rgba(150,180,255,.3); background:#0b1022; color:var(--ink); padding:8px 10px; }
-  .btn2 { background:#0e1540; cursor:pointer; }
+  .input { border-radius:8px; border:1px solid rgba(150,180,255,.3); background:#0b1022; color:var(--ink); padding:8px 10px; }
   .row { display:flex; gap:8px; align-items:center; }
   .list { list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:6px; }
   .chip { padding:4px 8px; background:#0c1228; border:1px solid rgba(150,180,255,.2); border-radius:6px; display:inline-flex; gap:6px; align-items:center; }
@@ -27,16 +26,15 @@
   .canvasWrap { background:var(--panel); border:1px solid rgba(150,180,255,.18); border-radius:10px; display:grid; grid-template-rows:auto 1fr auto; overflow:hidden; }
   .toolbar { display:flex; gap:8px; padding:8px; background:var(--panel2); border-bottom:1px solid rgba(150,180,255,.18); align-items:center; }
   #board { background:#0a0f1e; display:block; width:100%; height:100%; }
-  .slots { letter-spacing:8px; font-size:24px; text-align:center; padding:8px; background:#0b1120; border-top:1px solid rgba(150,180,255,.2); }
+  .slots { font-size:20px; text-align:center; padding:8px; background:#0b1120; border-top:1px solid rgba(150,180,255,.2); }
   .timer { font-weight:700; }
-  .mask { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+  .mask { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; letter-spacing: 2px; }
   .choices { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
   .choice { padding:8px 10px; background:#162044; border:1px solid rgba(150,180,255,.35); border-radius:8px; cursor:pointer; }
   .leader li { display:flex; justify-content:space-between; gap:10px; }
   .correctList { display:flex; gap:6px; flex-wrap:wrap; }
   .modal { position:fixed; inset:0; display:none; place-items:center; background:rgba(0,0,0,.55); }
   .modal .card { width:min(520px, calc(100vw - 32px)); background:var(--panel); border:1px solid rgba(150,180,255,.28); border-radius:12px; padding:16px; }
-  .hint { color:#d1ffea; } .correct { color:#56ffa9; } .me { color:#ffd166; } .small { font-size:12px; opacity:.85; }
 </style>
 </head>
 <body>
@@ -44,8 +42,9 @@
   <header>
     <div class="title">✏️ Draw & Guess</div>
     <div class="room">Room: <span id="roomId">—</span></div>
-    <button id="btnStart" class="btn2">Start Game (host)</button>
-    <button id="btnAgain" class="btn2" style="display:none;">Play again</button>
+    <button id="copyLink" class="btn">Copy Link</button>
+    <button id="btnStart" class="btn">Start (host)</button>
+    <button id="btnAgain" class="btn" style="display:none;">Play again</button>
   </header>
   <main>
     <section class="panel" id="leftPanel">
@@ -53,18 +52,17 @@
       <div class="body" id="lobbyBody">
         <div class="row" style="margin-bottom:10px;">
           <input id="inpName" class="input" placeholder="Your name" />
-          <button id="btnSetName" class="btn2">Set</button>
+          <button id="btnSetName" class="btn">Set</button>
           <label class="chip"><input type="checkbox" id="chkReady" /> Ready</label>
         </div>
         <div><strong>Players</strong></div>
         <ul id="players" class="list"></ul>
-
         <hr style="border-color:rgba(150,180,255,.15); border-style:solid; border-width:0 0 1px; margin:12px 0;">
         <div><strong>Chat</strong></div>
         <div id="chat" style="height:160px; overflow:auto; background:#0a0f1e; border:1px solid rgba(150,180,255,.18); border-radius:8px; padding:8px;"></div>
         <div class="row" style="margin-top:8px;">
           <input id="inpChat" class="input" placeholder="Message…" style="flex:1;" />
-          <button id="btnChat" class="btn2">Send</button>
+          <button id="btnChat" class="btn">Send</button>
         </div>
       </div>
 
@@ -74,48 +72,59 @@
           <div class="timer">⏱ <span id="secondsLeft">60</span>s</div>
         </div>
         <div style="margin-top:10px;">Word: <span class="mask" id="masked">_ _ _ _</span></div>
-        <div class="small hint" id="hintInfo" style="margin-top:6px;">Hints at 30/40/50s</div>
         <div style="margin-top:12px;"><strong>Correct guessers</strong></div>
         <div id="correctList" class="correctList"></div>
         <div style="margin-top:12px;"><strong>Leaderboard</strong></div>
         <ul id="leader" class="list leader"></ul>
       </div>
-      <div class="foot small"><span>Host can start when ready. Max 12 players.</span></div>
+      <div class="foot"><span>Host can start when ready. Max 12 players.</span></div>
     </section>
 
     <section class="canvasWrap">
       <div class="toolbar">
         <div>Drawer: <span id="drawerName">—</span></div>
         <div style="margin-left:auto;">Pen size:
-          <button class="btn2" id="penMinus">-</button>
+          <button class="btn" id="penMinus">-</button>
           <span id="penSize" class="chip">6</span>
-          <button class="btn2" id="penPlus">+</button>
+          <button class="btn" id="penPlus">+</button>
         </div>
         <div style="margin-left:8px;">Color: <input type="color" id="penColor" value="#ffffff" /></div>
-        <button class="btn2" id="btnClear" style="margin-left:8px;">Clear</button>
+        <button class="btn" id="btnClear" style="margin-left:8px;">Clear</button>
       </div>
       <canvas id="board"></canvas>
-      <div class="slots" id="slotsWrap"><input id="guessInput" class="input" style="width:100%; font-size:22px; text-align:center;" placeholder="Type your guess and press Enter…" /></div>
+      <div class="slots"><input id="guessInput" class="input" style="width:100%; text-align:center;" placeholder="Type your guess and press Enter…" /></div>
     </section>
 
     <section class="panel"><header>Leaderboard</header><div class="body"><ul id="leader2" class="list leader"></ul></div></section>
   </main>
 </div>
 
-<div class="modal" id="modalChoices"><div class="card"><h3>Choose a word to draw (60s)</h3><div class="choices" id="choiceList"></div><div class="small" style="margin-top:8px;">Pick one. Others will only see blanks.</div></div></div>
-<div class="modal" id="modalOver"><div class="card"><h2>Game Over 🎉</h2><p>Winner: <strong id="winnerName">—</strong></p><ul id="finalBoard" class="list leader" style="margin-top:8px;"></ul><div style="margin-top:12px;"><button id="btnAgainModal" class="btn2">Play again</button></div></div></div>
+<div class="modal" id="modalChoices"><div class="card"><h3>Choose a word to draw (60s)</h3><div class="choices" id="choiceList"></div></div></div>
+<div class="modal" id="modalOver"><div class="card"><h2>Game Over 🎉</h2><p>Winner: <strong id="winnerName">—</strong></p><ul id="finalBoard" class="list leader" style="margin-top:8px;"></ul><div style="margin-top:12px;"><button id="btnAgainModal" class="btn">Play again</button></div></div></div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
 (() => {
+  // Default everyone into the same room unless a ?room= is present
   const urlParams = new URLSearchParams(location.search);
-  let room = urlParams.get("room"); if(!room){ room = Math.random().toString(36).slice(2,8); urlParams.set("room", room); history.replaceState(null,"","?"+urlParams.toString()); }
-  const socket = io({ query:{ room } });
+  let room = urlParams.get("room") || "party";
+  if (!urlParams.get("room")) {
+    urlParams.set("room", room);
+    history.replaceState(null, "", "?" + urlParams.toString());
+  }
 
+  // Force WebSockets (helps on some hosts)
+  const socket = io({ query: { room }, transports: ["websocket"], upgrade: true });
+  socket.on("connect_error", (err) => console.warn("socket connect_error:", err.message));
+  socket.on("disconnect", (reason) => console.warn("socket disconnected:", reason));
+
+  // State
   let me={id:null, hostId:null}, players=[], leaderboard={}, state="lobby";
   let drawerId=null, amDrawer=false, secondsLeft=60, masked="", correctSet=new Set();
 
+  // UI refs
   const roomIdEl = document.getElementById("roomId");
+  const copyLinkBtn = document.getElementById("copyLink");
   const btnStart = document.getElementById("btnStart");
   const btnAgain = document.getElementById("btnAgain");
   const playersEl = document.getElementById("players");
@@ -124,23 +133,34 @@
   const inpName = document.getElementById("inpName"), btnSetName = document.getElementById("btnSetName"), chkReady = document.getElementById("chkReady");
   const secondsLeftEl = document.getElementById("secondsLeft"), maskedEl = document.getElementById("masked"),
         drawerNameEl = document.getElementById("drawerName"), roundIndexEl = document.getElementById("roundIndex"),
-        correctListEl = document.getElementById("correctList"), leftLobbyBody = document.getElementById("lobbyBody"),
-        leftRoundSidebar = document.getElementById("roundSidebar");
+        correctListEl = document.getElementById("correctList"),
+        leftLobbyBody = document.getElementById("lobbyBody"), leftRoundSidebar = document.getElementById("roundSidebar");
 
+  // Canvas
   const board = document.getElementById("board"); const ctx = board.getContext("2d");
   let drawing=false, penSize=6, penColor="#ffffff";
   const penMinus = document.getElementById("penMinus"), penPlus = document.getElementById("penPlus"),
         penSizeEl = document.getElementById("penSize"), penColorEl = document.getElementById("penColor"),
         btnClear = document.getElementById("btnClear");
   const guessInput = document.getElementById("guessInput");
+
   const modalChoices = document.getElementById("modalChoices"); const choiceList = document.getElementById("choiceList");
   const modalOver = document.getElementById("modalOver"); const winnerName = document.getElementById("winnerName");
   const finalBoard = document.getElementById("finalBoard"); const btnAgainModal = document.getElementById("btnAgainModal");
 
+  // Canvas sizing & init
+  function clearCanvas(){ ctx.fillStyle="#0a0f1e"; ctx.fillRect(0,0,board.clientWidth, board.clientHeight); }
   function resize(){ board.width = board.clientWidth * devicePixelRatio; board.height = board.clientHeight * devicePixelRatio; ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0); clearCanvas(); }
   new ResizeObserver(resize).observe(board);
-  function clearCanvas(){ ctx.fillStyle="#0a0f1e"; ctx.fillRect(0,0,board.clientWidth, board.clientHeight); }
+  // Force an initial paint (fixes a first-load blank on some browsers)
+  window.addEventListener("load", resize);
+
+  // Lobby UI
   roomIdEl.textContent = room;
+  copyLinkBtn.onclick = async () => {
+    await navigator.clipboard.writeText(location.href);
+    alert("Link copied! Share this exact URL (including ?room=) to join the same room.");
+  };
 
   btnChat.onclick = ()=>{ const text=inpChat.value.trim(); if(!text) return; socket.emit("chat:send",{text}); inpChat.value=""; };
   inpChat.addEventListener("keydown", e=>{ if(e.key==="Enter") btnChat.click(); });
@@ -150,7 +170,157 @@
   btnAgain.onclick = ()=> socket.emit("play:again");
   btnAgainModal.onclick = ()=>{ socket.emit("play:again"); modalOver.style.display="none"; };
 
+  // Guessing
+  guessInput.addEventListener("keydown", e=>{ if(e.key==="Enter"){ const text=guessInput.value.trim(); if(text) socket.emit("guess:submit",{text}); guessInput.value=""; } });
+
+  // Drawing helpers
   penMinus.onclick = ()=>{ penSize=Math.max(2,penSize-2); penSizeEl.textContent=penSize; };
   penPlus.onclick = ()=>{ penSize=Math.min(40,penSize+2); penSizeEl.textContent=penSize; };
   penColorEl.oninput = e=> penColor = e.target.value;
-  btnCl
+  btnClear.onclick = ()=>{ if(amDrawer) clearCanvas(); };
+
+  function drawDot(x, y, size, color) {
+    ctx.fillStyle = color || "#fff";
+    ctx.beginPath();
+    ctx.arc(x, y, size || 6, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Drawer draws; send size/color on every packet
+  board.addEventListener("mousedown", e=>{
+    if(!amDrawer || state!=="drawing") return;
+    drawing=true; const {offsetX:x, offsetY:y}=e;
+    drawDot(x,y,penSize,penColor);
+    socket.emit("draw:begin",{ x,y, size: penSize, color: penColor });
+  });
+  window.addEventListener("mousemove", e=>{
+    if(!drawing || !amDrawer) return;
+    const r = board.getBoundingClientRect(); const x=e.clientX-r.left, y=e.clientY-r.top;
+    drawDot(x,y,penSize,penColor);
+    socket.emit("draw:move",{ x,y, size: penSize, color: penColor });
+  });
+  window.addEventListener("mouseup", ()=>{
+    if(!amDrawer) return;
+    if(drawing) socket.emit("draw:end",{});
+    drawing=false;
+  });
+
+  // Guessers render with remote size/color
+  socket.on("draw:begin", ({x,y,size,color}) => drawDot(x,y,size,color));
+  socket.on("draw:move",  ({x,y,size,color}) => drawDot(x,y,size,color));
+  socket.on("draw:end",   () => {});
+
+  // Sockets: room & flow
+  socket.on("room:joined", ({ roomId, playerId, hostId }) => {
+    me.id = playerId; me.hostId = hostId;
+    document.getElementById("inpName").value = "Player " + playerId.slice(0,4);
+  });
+
+  socket.on("room:state", (payload) => {
+    state = payload.state; me.hostId = payload.hostId;
+    players = payload.players; leaderboard = payload.leaderboard || {};
+    drawerId = payload.drawerId; secondsLeft = payload.secondsLeft || 0;
+    masked = payload.masked || "";
+    amDrawer = (drawerId === me.id);
+
+    drawerNameEl.textContent = players.find(p=>p.id===drawerId)?.name || "—";
+    secondsLeftEl.textContent = secondsLeft;
+    maskedEl.textContent = masked.split("").join(" ");
+    roundIndexEl.textContent = payload.roundIndex;
+
+    const isLobby = state === "lobby";
+    leftLobbyBody.style.display = isLobby ? "" : "none";
+    leftRoundSidebar.style.display = isLobby ? "none" : "";
+    btnStart.style.display = (isLobby && me.id === me.hostId) ? "" : "none";
+    btnAgain.style.display = (state === "gameOver") ? "" : "none";
+    guessInput.disabled = amDrawer || state!=="drawing";
+
+    playersEl.innerHTML = "";
+    players.forEach(p=>{
+      const li = document.createElement("li");
+      const dot = `<span class="${p.ready?'ready':'ready notready'}"></span>`;
+      li.innerHTML = `${dot} ${escapeHTML(p.name)} ${p.id===me.hostId?'<span class="chip">Host</span>':''}`;
+      playersEl.appendChild(li);
+    });
+
+    renderLeaderboard(leader);
+    renderLeaderboard(leader2);
+  });
+
+  socket.on("chat:new", ({ name, text }) => {
+    const div = document.createElement("div");
+    div.innerHTML = `<span style="color:#ffd166">${escapeHTML(name)}</span>: ${escapeHTML(text)}`;
+    chatEl.appendChild(div); chatEl.scrollTop = chatEl.scrollHeight;
+  });
+
+  socket.on("round:choices", ({ choices }) => {
+    if (!amDrawer) return;
+    choiceList.innerHTML = "";
+    choices.forEach(w=>{
+      const b = document.createElement("div");
+      b.className = "choice"; b.textContent = w.toUpperCase();
+      b.onclick = () => { modalChoices.style.display="none"; socket.emit("drawer:chooseWord",{ word:w }); clearCanvas(); };
+      choiceList.appendChild(b);
+    });
+    modalChoices.style.display = "grid";
+  });
+
+  socket.on("round:start", ({ masked: m, secondsLeft: s }) => {
+    masked = m; secondsLeft = s; maskedEl.textContent = masked.split("").join(" ");
+    correctSet.clear(); document.getElementById("correctList").innerHTML = "";
+    clearCanvas();
+  });
+
+  socket.on("tick", ({ secondsLeft: s, masked: m }) => {
+    secondsLeft = s; secondsLeftEl.textContent = s;
+    if (m) { masked = m; maskedEl.textContent = masked.split("").join(" "); }
+  });
+
+  socket.on("hint:reveal", ({ masked: m }) => {
+    masked = m; maskedEl.textContent = masked.split("").join(" ");
+  });
+
+  socket.on("guess:correct", ({ playerId, name }) => {
+    correctSet.add(playerId);
+    const chip = document.createElement("span");
+    chip.className = "chip"; chip.textContent = name;
+    correctListEl.appendChild(chip);
+  });
+
+  socket.on("round:end", ({ word }) => {
+    const div = document.createElement("div");
+    div.innerHTML = `<em>Round over. The word was <strong>${escapeHTML(word)}</strong>.</em>`;
+    chatEl.appendChild(div); chatEl.scrollTop = chatEl.scrollHeight;
+    renderLeaderboard(leader); renderLeaderboard(leader2);
+  });
+
+  socket.on("game:over", ({ leaderboard: lb }) => {
+    let topId=null, topScore=-1;
+    Object.entries(lb).forEach(([id,score])=>{ if(score>topScore){ topScore=score; topId=id; } });
+    const pname = players.find(p=>p.id===topId)?.name || "—";
+    document.getElementById("winnerName").textContent = `${pname} (${topScore} pts)`;
+    const finalBoard = document.getElementById("finalBoard"); finalBoard.innerHTML = "";
+    Object.entries(lb).sort((a,b)=>b[1]-a[1]).forEach(([id,score])=>{
+      const li=document.createElement("li");
+      const name=players.find(p=>p.id===id)?.name || id.slice(0,5);
+      li.innerHTML = `<span>${escapeHTML(name)}</span><strong>${score}</strong>`;
+      finalBoard.appendChild(li);
+    });
+    document.getElementById("modalOver").style.display="grid";
+  });
+
+  // Utils
+  function renderLeaderboard(el){
+    el.innerHTML = "";
+    Object.entries(leaderboard).sort((a,b)=>b[1]-a[1]).forEach(([id,score])=>{
+      const li=document.createElement("li");
+      const name=players.find(p=>p.id===id)?.name || id.slice(0,5);
+      li.innerHTML = `<span>${escapeHTML(name)}</span><strong>${score}</strong>`;
+      el.appendChild(li);
+    });
+  }
+  const escapeHTML = s=>(s+"").replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+})();
+</script>
+</body>
+</html>
