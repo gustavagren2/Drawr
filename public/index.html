@@ -8,11 +8,10 @@
   :root { --bg:#0b0f1a; --panel:#0f1528; --panel2:#0b1120; --ink:#e8eefc; --brand:#7ab8ff; --accent:#56ffa9; --warn:#ffd166; }
   html, body { margin:0; height:100%; background:var(--bg); color:var(--ink); font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; }
   .wrap { display:grid; grid-template-rows:auto 1fr; height:100%; }
-  header { display:flex; gap:12px; align-items:center; padding:10px 12px; background:linear-gradient(180deg,#0e1430,#0a0f22); border-bottom:1px solid rgba(150,180,255,.2); }
+  header { display:flex; gap:8px; align-items:center; padding:10px 12px; background:linear-gradient(180deg,#0e1430,#0a0f22); border-bottom:1px solid rgba(150,180,255,.2); }
   header .title { font-weight:800; }
   header .room { margin-left:auto; font-size:13px; opacity:.9; }
-  header .btn { margin-left:8px; padding:6px 10px; background:#0e1540; border:1px solid rgba(150,180,255,.3); border-radius:8px; color:var(--ink); cursor:pointer; transition:transform .08s; }
-  header .btn:active { transform:scale(0.98); }
+  header .btn { margin-left:6px; padding:6px 10px; background:#0e1540; border:1px solid rgba(150,180,255,.3); border-radius:8px; color:var(--ink); cursor:pointer; }
   main { display:grid; grid-template-columns:320px 1fr 320px; gap:12px; padding:12px; }
   .panel { background:var(--panel); border:1px solid rgba(150,180,255,.18); border-radius:12px; overflow:hidden; display:flex; flex-direction:column; box-shadow:0 8px 30px rgba(0,0,0,.25); }
   .panel header { padding:8px 10px; background:var(--panel2); border-bottom:1px solid rgba(150,180,255,.18); }
@@ -25,24 +24,20 @@
   .readyDot { width:10px; height:10px; border-radius:50%; background:#5fff87; display:inline-block; box-shadow:0 0 10px rgba(95,255,135,.6); }
   .notready { background:#666; box-shadow:none; }
   .canvasWrap { background:var(--panel); border:1px solid rgba(150,180,255,.18); border-radius:12px; display:grid; grid-template-rows:auto 1fr auto; overflow:hidden; box-shadow:0 8px 30px rgba(0,0,0,.25); }
-  .toolbar { display:flex; gap:8px; padding:8px; background:var(--panel2); border-bottom:1px solid rgba(150,180,255,.18); align-items:center; }
+  .toolbar { display:flex; gap:8px; padding:8px; background:var(--panel2); border-bottom:1px solid rgba(150,180,255,.18); align-items:center; flex-wrap:wrap; }
+  .tool { padding:6px 10px; border:1px solid rgba(150,180,255,.3); border-radius:8px; background:#0b1022; cursor:pointer; }
+  .tool.active { outline:2px solid var(--brand); }
   #board { background:#070c18; display:block; width:100%; height:100%; cursor: crosshair; }
   .slots { font-size:20px; text-align:center; padding:8px; background:#0b1120; border-top:1px solid rgba(150,180,255,.2); }
   .timer { font-weight:800; transition: transform .2s; }
   .timer.low { color:var(--warn); transform: scale(1.1); }
   .mask { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; letter-spacing: 2px; }
   .choices { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
-  .choice { padding:10px 12px; background:#162044; border:1px solid rgba(150,180,255,.35); border-radius:10px; cursor:pointer; transition: transform .08s; }
-  .choice:hover { transform: translateY(-1px); }
+  .choice { padding:10px 12px; background:#162044; border:1px solid rgba(150,180,255,.35); border-radius:10px; cursor:pointer; }
   .leader li { display:flex; justify-content:space-between; gap:10px; }
   .correctList { display:flex; gap:6px; flex-wrap:wrap; }
   .modal { position:fixed; inset:0; display:none; place-items:center; background:rgba(0,0,0,.55); }
   .modal .card { width:min(560px, calc(100vw - 32px)); background:var(--panel); border:1px solid rgba(150,180,255,.28); border-radius:14px; padding:16px; box-shadow:0 20px 60px rgba(0,0,0,.4); }
-  .grow { animation: grow .25s ease-out; }
-  @keyframes grow { from { transform: scale(.95); opacity:.7 } to { transform: scale(1); opacity:1 } }
-  .pop { animation: pop .2s ease-out; }
-  @keyframes pop { from { transform: scale(.8); } to { transform: scale(1); } }
-  .confetti { position:fixed; pointer-events:none; inset:0; overflow:hidden; }
 </style>
 </head>
 <body>
@@ -53,6 +48,7 @@
     <button id="copyLink" class="btn">Copy Link</button>
     <button id="btnStart" class="btn">Start (host)</button>
     <button id="btnAgain" class="btn" style="display:none;">Play again</button>
+    <button id="btnSound" class="btn">🔈 Sound: Off</button>
   </header>
   <main>
     <section class="panel" id="leftPanel">
@@ -90,14 +86,20 @@
 
     <section class="canvasWrap">
       <div class="toolbar">
-        <div>Drawer: <span id="drawerName">—</span></div>
-        <div style="margin-left:auto;">Pen size:
+        <div class="row">
+          <button class="tool" data-tool="brush">🖊️ Brush</button>
+          <button class="tool" data-tool="eraser">🧽 Eraser</button>
+          <button class="tool" data-tool="bucket">🪣 Bucket</button>
+        </div>
+        <div style="margin-left:auto;" class="row">
+          <span>Size</span>
           <button class="btn" id="penMinus">-</button>
           <span id="penSize" class="chip">6</span>
           <button class="btn" id="penPlus">+</button>
+          <span style="margin-left:8px;">Color</span>
+          <input type="color" id="penColor" value="#ffffff" />
+          <button class="btn" id="btnClear" style="margin-left:8px;">Clear</button>
         </div>
-        <div style="margin-left:8px;">Color: <input type="color" id="penColor" value="#ffffff" /></div>
-        <button class="btn" id="btnClear" style="margin-left:8px;">Clear</button>
       </div>
       <canvas id="board"></canvas>
       <div class="slots"><input id="guessInput" class="input" style="width:100%; text-align:center;" placeholder="Type your guess and press Enter…" /></div>
@@ -108,10 +110,10 @@
 </div>
 
 <!-- Drawer word choices -->
-<div class="modal" id="modalChoices"><div class="card grow"><h3>Choose a word to draw (60s)</h3><div class="choices" id="choiceList"></div></div></div>
+<div class="modal" id="modalChoices"><div class="card"><h3>Choose a word to draw (60s)</h3><div class="choices" id="choiceList"></div></div></div>
 
 <!-- Round results -->
-<div class="modal" id="modalRound"><div class="card grow">
+<div class="modal" id="modalRound"><div class="card">
   <h3>Round Results</h3>
   <p>Word: <strong id="resWord">—</strong></p>
   <p>Top scorer: <strong id="resTop">—</strong></p>
@@ -119,14 +121,12 @@
 </div></div>
 
 <!-- Game Over -->
-<div class="modal" id="modalOver"><div class="card grow">
+<div class="modal" id="modalOver"><div class="card">
   <h2>Game Over 🎉</h2>
   <p>Winner: <strong id="winnerName">—</strong></p>
   <ul id="finalBoard" class="list leader" style="margin-top:8px;"></ul>
   <div style="margin-top:12px;"><button id="btnAgainModal" class="btn">Play again</button></div>
 </div></div>
-
-<canvas id="fx" class="confetti"></canvas>
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
@@ -136,9 +136,36 @@
   let room = urlParams.get("room") || "party";
   if (!urlParams.get("room")) { urlParams.set("room", room); history.replaceState(null, "", "?" + urlParams.toString()); }
 
-  // Force WS (stable on Render)
+  // Force WS
   const socket = io({ query: { room }, transports: ["websocket"], upgrade: true });
 
+  // ---- SFX (WebAudio tiny synth) ----
+  let sfxOn = false, ac = null;
+  const btnSound = document.getElementById('btnSound');
+  btnSound.onclick = () => {
+    sfxOn = !sfxOn;
+    if (sfxOn && !ac) ac = new (window.AudioContext || window.webkitAudioContext)();
+    btnSound.textContent = sfxOn ? "🔊 Sound: On" : "🔈 Sound: Off";
+  };
+  function tone(freq=440, dur=0.15, type='sine', gain=0.03){
+    if (!sfxOn || !ac) return;
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = type; o.frequency.value = freq;
+    o.connect(g); g.connect(ac.destination);
+    const t = ac.currentTime;
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(gain, t+0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+    o.start(t); o.stop(t+dur+0.05);
+  }
+  const sfx = {
+    start: ()=>{ tone(660,0.12,'square',0.05); setTimeout(()=>tone(880,0.1,'square',0.04),80); },
+    correct: ()=>{ tone(800,0.08,'triangle',0.05); setTimeout(()=>tone(1200,0.08,'triangle',0.04),70); },
+    warn: ()=>{ tone(300,0.07,'sawtooth',0.05); },
+    end: ()=>{ tone(220,0.18,'square',0.06); }
+  };
+
+  // ---- State & UI refs ----
   let me={id:null, hostId:null}, players=[], leaderboard={}, state="lobby";
   let drawerId=null, amDrawer=false, secondsLeft=60, masked="", correctSet=new Set();
 
@@ -156,92 +183,96 @@
         leftLobbyBody = document.getElementById("lobbyBody"), leftRoundSidebar = document.getElementById("roundSidebar"),
         timerEl = document.getElementById("timer");
 
-  const board = document.getElementById("board"); const ctx = board.getContext("2d");
-  const fx = document.getElementById("fx"); const fxc = fx.getContext("2d");
-  let drawing=false, penSize=6, penColor="#ffffff";
+  // ---- Canvas, tools, smoothing ----
+  const board = document.getElementById("board"); const ctx = board.getContext("2d", { willReadFrequently: true });
+  let drawing=false, penSize=6, penColor="#ffffff", tool="brush", bucketTolerance=24;
   const penMinus = document.getElementById("penMinus"), penPlus = document.getElementById("penPlus"),
         penSizeEl = document.getElementById("penSize"), penColorEl = document.getElementById("penColor"),
         btnClear = document.getElementById("btnClear");
-  const guessInput = document.getElementById("guessInput");
 
-  const modalChoices = document.getElementById("modalChoices"); const choiceList = document.getElementById("choiceList");
-  const modalOver = document.getElementById("modalOver"); const winnerName = document.getElementById("winnerName");
-  const finalBoard = document.getElementById("finalBoard"); const btnAgainModal = document.getElementById("btnAgainModal");
-  const modalRound = document.getElementById("modalRound"); const resWord = document.getElementById("resWord");
-  const resTop = document.getElementById("resTop"); const resList = document.getElementById("resList");
+  // tool buttons
+  document.querySelectorAll('.tool').forEach(b=>{
+    b.onclick = ()=>{ tool = b.dataset.tool; document.querySelectorAll('.tool').forEach(x=>x.classList.toggle('active', x===b)); };
+  });
+  document.querySelector('.tool[data-tool="brush"]').classList.add('active');
 
   // Canvas sizing
-  function clearCanvas(){ ctx.fillStyle="#070c18"; ctx.fillRect(0,0,board.clientWidth, board.clientHeight); }
+  function clearCanvas(){ ctx.save(); ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0); ctx.fillStyle="#070c18"; ctx.fillRect(0,0,board.clientWidth, board.clientHeight); ctx.restore(); }
   function resize(){
-    board.width = board.clientWidth * devicePixelRatio;
-    board.height = board.clientHeight * devicePixelRatio;
+    board.width = Math.floor(board.clientWidth * devicePixelRatio);
+    board.height = Math.floor(board.clientHeight * devicePixelRatio);
     ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
     clearCanvas();
-    fx.width = innerWidth * devicePixelRatio; fx.height = innerHeight * devicePixelRatio;
-    fxc.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
   }
   new ResizeObserver(resize).observe(board);
-  window.addEventListener("resize", ()=>{ fx.width=innerWidth*devicePixelRatio; fx.height=innerHeight*devicePixelRatio; });
   window.addEventListener("load", resize);
 
-  // Lobby UI
+  // UI actions
   roomIdEl.textContent = room;
   copyLinkBtn.onclick = async () => { await navigator.clipboard.writeText(location.href); alert("Link copied! Share this exact URL."); };
-
   btnChat.onclick = ()=>{ const text=inpChat.value.trim(); if(!text) return; socket.emit("chat:send",{text}); inpChat.value=""; };
   inpChat.addEventListener("keydown", e=>{ if(e.key==="Enter") btnChat.click(); });
   btnSetName.onclick = ()=>{ const name=inpName.value.trim().slice(0,24); if(!name) return; socket.emit("player:setName",{name}); };
   chkReady.onchange = ()=> socket.emit("player:ready",{ready: chkReady.checked});
   btnStart.onclick = ()=> socket.emit("game:start");
   btnAgain.onclick = ()=> socket.emit("play:again");
-  btnAgainModal.onclick = ()=>{ socket.emit("play:again"); modalOver.style.display="none"; };
 
   // Guessing
+  const guessInput = document.getElementById("guessInput");
   guessInput.addEventListener("keydown", e=>{ if(e.key==="Enter"){ const text=guessInput.value.trim(); if(text) socket.emit("guess:submit",{text}); guessInput.value=""; } });
 
-  // Brush smoothing (local + remote): keep last point, draw rounded strokes
-  let lastX=null, lastY=null;
-  function strokeTo(x,y,size,color){
+  // Brush smoothing
+  let last = null;
+  function strokeTo(x,y,size,color,mode='source-over'){
+    ctx.save();
+    ctx.globalCompositeOperation = mode;
     ctx.strokeStyle = color || "#fff";
     ctx.lineWidth = size || 6;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     ctx.beginPath();
-    if(lastX==null){ ctx.moveTo(x,y); ctx.lineTo(x,y); }
+    if(!last){ ctx.moveTo(x,y); ctx.lineTo(x,y); }
     else {
-      // simple quadratic smoothing
-      const mx = (lastX + x) / 2, my = (lastY + y) / 2;
-      ctx.moveTo(lastX, lastY);
-      ctx.quadraticCurveTo(lastX, lastY, mx, my);
+      const mx=(last.x+x)/2, my=(last.y+y)/2;
+      ctx.moveTo(last.x,last.y);
+      ctx.quadraticCurveTo(last.x,last.y,mx,my);
       ctx.lineTo(x,y);
     }
     ctx.stroke();
-    lastX = x; lastY = y;
+    ctx.restore();
+    last = {x,y};
   }
-  function strokeEnd(){ lastX = lastY = null; }
+  function strokeEnd(){ last=null; }
 
-  // Throttle moves to ~60fps
-  let canSend = true;
-  function sendMove(x,y){
-    if(!canSend) return;
-    canSend = false;
-    socket.emit("draw:move", { x, y, size: penSize, color: penColor });
-    requestAnimationFrame(()=>{ canSend = true; });
-  }
+  // Normalize coords so different screen sizes stay in sync
+  const norm = (x,y)=>({ nx: x/board.clientWidth, ny: y/board.clientHeight });
+  const denorm = (nx,ny)=>({ x: nx*board.clientWidth, y: ny*board.clientHeight });
 
   // Drawer events
   board.addEventListener("mousedown", e=>{
     if(!amDrawer || state!=="drawing") return;
-    drawing=true;
-    const {offsetX:x, offsetY:y}=e;
-    strokeTo(x,y,penSize,penColor);
-    socket.emit("draw:begin",{ x,y, size: penSize, color: penColor });
+    const {offsetX: x, offsetY: y} = e;
+    if (tool === 'bucket') {
+      bucketFillAt(x, y, penColor, bucketTolerance);
+      const {nx,ny} = norm(x,y);
+      socket.emit("draw:begin", { kind:"bucket", nx, ny, color: penColor, tol: bucketTolerance });
+      socket.emit("draw:end", {});
+      return;
+    }
+    drawing = true;
+    const mode = (tool==='eraser') ? 'destination-out' : 'source-over';
+    strokeTo(x,y,penSize,penColor,mode);
+    const {nx,ny} = norm(x,y);
+    socket.emit("draw:begin", { kind:"stroke", nx, ny, size: penSize, color: penColor, tool });
   });
   window.addEventListener("mousemove", e=>{
     if(!drawing || !amDrawer) return;
-    const r = board.getBoundingClientRect(); const x=e.clientX-r.left, y=e.clientY-r.top;
-    strokeTo(x,y,penSize,penColor);
-    sendMove(x,y);
+    const r = board.getBoundingClientRect();
+    const x = e.clientX - r.left, y = e.clientY - r.top;
+    const mode = (tool==='eraser') ? 'destination-out' : 'source-over';
+    strokeTo(x,y,penSize,penColor,mode);
+    const {nx,ny} = norm(x,y);
+    socket.emit("draw:move", { kind:"stroke", nx, ny, size: penSize, color: penColor, tool });
   });
   window.addEventListener("mouseup", ()=>{
     if(!amDrawer) return;
@@ -249,14 +280,71 @@
     drawing=false; strokeEnd();
   });
   btnClear.onclick = ()=>{ if(amDrawer){ clearCanvas(); strokeEnd(); } };
-  penMinus.onclick = ()=>{ penSize=Math.max(2,penSize-2); penSizeEl.textContent=penSize; };
-  penPlus.onclick = ()=>{ penSize=Math.min(40,penSize+2); penSizeEl.textContent=penSize; };
-  penColorEl.oninput = e=> penColor = e.target.value;
+  penMinus.onclick = ()=>{ penSize=Math.max(2,penSize-2); document.getElementById("penSize").textContent=penSize; };
+  penPlus.onclick  = ()=>{ penSize=Math.min(40,penSize+2); document.getElementById("penSize").textContent=penSize; };
+  document.getElementById("penColor").oninput = e=> penColor = e.target.value;
 
-  // Remote drawer
-  socket.on("draw:begin", ({x,y,size,color}) => { strokeTo(x,y,size,color); });
-  socket.on("draw:move",  ({x,y,size,color}) => { strokeTo(x,y,size,color); });
-  socket.on("draw:end",   () => { strokeEnd(); });
+  // Bucket fill (flood fill, tolerance)
+  function bucketFillAt(cx, cy, hex, tol=24){
+    // map to device pixels
+    const sx = Math.floor(cx * devicePixelRatio);
+    const sy = Math.floor(cy * devicePixelRatio);
+    const w = board.width, h = board.height;
+    const img = ctx.getImageData(0,0,board.clientWidth,board.clientHeight);
+    const data = img.data;
+    // target color
+    const idx = ( (Math.floor(cy)*img.width) + Math.floor(cx) ) * 4;
+    const tr = data[idx], tg = data[idx+1], tb = data[idx+2], ta = data[idx+3];
+    const newCol = hexToRGBA(hex);
+    if (colorsClose(tr,tg,tb,ta, newCol.r,newCol.g,newCol.b,255, tol)) return;
+
+    const stack = [[Math.floor(cx), Math.floor(cy)]];
+    const seen = new Uint8Array(img.width * img.height);
+
+    while(stack.length){
+      const [x,y] = stack.pop();
+      if (x<0||y<0||x>=img.width||y>=img.height) continue;
+      const i = (y*img.width + x);
+      if (seen[i]) continue;
+      const di = i*4;
+      const r=data[di], g=data[di+1], b=data[di+2], a=data[di+3];
+      if (!colorsClose(r,g,b,a, tr,tg,tb,ta, tol)) continue;
+      // set new color
+      data[di]=newCol.r; data[di+1]=newCol.g; data[di+2]=newCol.b; data[di+3]=255;
+      seen[i]=1;
+      stack.push([x+1,y],[x-1,y],[x,y+1],[x,y-1]);
+    }
+    ctx.putImageData(img,0,0);
+  }
+  function hexToRGBA(hex){
+    const h = hex.replace('#','');
+    const r=parseInt(h.slice(0,2),16), g=parseInt(h.slice(2,4),16), b=parseInt(h.slice(4,6),16);
+    return {r,g,b,a:255};
+  }
+  function colorsClose(r1,g1,b1,a1, r2,g2,b2,a2, tol){
+    return Math.abs(r1-r2)<=tol && Math.abs(g1-g2)<=tol && Math.abs(b1-b2)<=tol; // ignore alpha
+  }
+
+  // Remote draw handling (supports stroke & bucket; normalized coords)
+  socket.on("draw:begin", (p) => {
+    if (p.kind === "bucket") {
+      const {x,y} = denorm(p.nx, p.ny);
+      bucketFillAt(x, y, p.color, p.tol ?? 24);
+      return;
+    }
+    if (p.kind === "stroke") {
+      const {x,y} = denorm(p.nx, p.ny);
+      const mode = (p.tool==='eraser') ? 'destination-out' : 'source-over';
+      strokeTo(x,y,p.size,p.color,mode);
+    }
+  });
+  socket.on("draw:move", (p) => {
+    if (p.kind !== "stroke") return;
+    const {x,y} = denorm(p.nx, p.ny);
+    const mode = (p.tool==='eraser') ? 'destination-out' : 'source-over';
+    strokeTo(x,y,p.size,p.color,mode);
+  });
+  socket.on("draw:end", () => { strokeEnd(); });
 
   // Room & flow
   socket.on("room:joined", ({ roomId, playerId, hostId }) => {
@@ -272,7 +360,7 @@
 
     amDrawer = (drawerId === me.id);
 
-    drawerNameEl.textContent = players.find(p=>p.id===drawerId)?.name || "—";
+    document.getElementById("drawerName")?.replaceChildren(document.createTextNode(players.find(p=>p.id===drawerId)?.name || "—"));
     secondsLeftEl.textContent = secondsLeft;
     timerEl.classList.toggle("low", secondsLeft <= 10 && state==="drawing");
     maskedEl.textContent = masked.split("").join(" ");
@@ -285,13 +373,12 @@
     btnAgain.style.display = (state === "gameOver") ? "" : "none";
     guessInput.disabled = amDrawer || state!=="drawing";
 
-    // Only active players arrive here now
+    // Active players only (server filters)
     playersEl.innerHTML = "";
     players.forEach(p=>{
       const li = document.createElement("li");
       const dot = `<span class="readyDot ${p.ready?'':'notready'}"></span>`;
       li.innerHTML = `${dot} ${escapeHTML(p.name)} ${p.id===me.hostId?'<span class="chip">Host</span>':''}`;
-      li.classList.add("grow");
       playersEl.appendChild(li);
     });
 
@@ -301,11 +388,12 @@
 
   socket.on("chat:new", ({ name, text }) => {
     const div = document.createElement("div");
-    div.innerHTML = `<span style="color:#ffd166" class="pop">${escapeHTML(name)}</span>: ${escapeHTML(text)}`;
+    div.innerHTML = `<span style="color:#ffd166">${escapeHTML(name)}</span>: ${escapeHTML(text)}`;
     chatEl.appendChild(div); chatEl.scrollTop = chatEl.scrollHeight;
   });
 
   // Choices modal (drawer only)
+  const modalChoices = document.getElementById("modalChoices"), choiceList = document.getElementById("choiceList");
   socket.on("round:choices", ({ choices }) => {
     if (!amDrawer) return;
     choiceList.innerHTML = "";
@@ -313,21 +401,29 @@
       const b = document.createElement("div");
       b.className = "choice";
       b.textContent = w.toUpperCase();
-      b.onclick = () => { modalChoices.style.display="none"; socket.emit("drawer:chooseWord",{ word:w }); clearCanvas(); };
+      b.onclick = () => { modalChoices.style.display="none"; socket.emit("drawer:chooseWord",{ word:w }); clearCanvas(); strokeEnd(); };
       choiceList.appendChild(b);
     });
     modalChoices.style.display = "grid";
   });
 
+  // Round flow + SFX hooks
+  const modalRound = document.getElementById("modalRound");
+  const resWord = document.getElementById("resWord");
+  const resTop = document.getElementById("resTop");
+  const resList = document.getElementById("resList");
+
   socket.on("round:start", ({ masked: m, secondsLeft: s }) => {
     masked = m; secondsLeft = s; secondsLeftEl.textContent = s; timerEl.classList.remove("low");
     maskedEl.textContent = masked.split("").join(" ");
-    correctSet.clear(); correctListEl.innerHTML = "";
+    correctSet.clear(); document.getElementById("correctList").innerHTML = "";
     clearCanvas(); strokeEnd();
+    sfx.start();
   });
 
   socket.on("tick", ({ secondsLeft: s, masked: m }) => {
     secondsLeft = s; secondsLeftEl.textContent = s;
+    if (s === 10) sfx.warn();
     timerEl.classList.toggle("low", secondsLeft <= 10 && state==="drawing");
     if (m) { masked = m; maskedEl.textContent = masked.split("").join(" "); }
   });
@@ -338,13 +434,13 @@
 
   socket.on("guess:correct", ({ playerId, name }) => {
     const chip = document.createElement("span");
-    chip.className = "chip pop"; chip.textContent = name;
-    correctListEl.appendChild(chip);
+    chip.className = "chip"; chip.textContent = name;
+    document.getElementById("correctList").appendChild(chip);
+    sfx.correct();
   });
 
-  // Round results popup with per-round points + confetti
   socket.on("round:end", ({ word, perPlayer, leaderboard: lb, best }) => {
-    // Update boards
+    sfx.end();
     leaderboard = lb || leaderboard;
     renderLeaderboard(leader); renderLeaderboard(leader2);
 
@@ -358,11 +454,14 @@
       resList.appendChild(li);
     });
     modalRound.style.display = "grid";
-
-    // confetti if drawer did great (>= 350)
-    if (best && best.points >= 350) confettiBurst();
-    setTimeout(()=>{ modalRound.style.display = "none"; }, 3200);
+    setTimeout(()=>{ modalRound.style.display = "none"; }, 3000);
   });
+
+  const modalOver = document.getElementById("modalOver");
+  const winnerName = document.getElementById("winnerName");
+  const finalBoard = document.getElementById("finalBoard");
+  const btnAgainModal = document.getElementById("btnAgainModal");
+  btnAgainModal.onclick = ()=>{ socket.emit("play:again"); modalOver.style.display="none"; };
 
   socket.on("game:over", ({ leaderboard: lb }) => {
     let topId=null, topScore=-1;
@@ -377,7 +476,6 @@
       finalBoard.appendChild(li);
     });
     modalOver.style.display="grid";
-    confettiBurst();
   });
 
   // Utils
@@ -391,26 +489,6 @@
     });
   }
   const escapeHTML = s=>(s+"").replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-
-  // Tiny confetti
-  function confettiBurst(){
-    const bits = Array.from({length: 80}, ()=>({
-      x: Math.random()*innerWidth, y: -20, vx:(Math.random()*2-1)*2, vy: 2+Math.random()*3,
-      w: 4+Math.random()*3, h: 8+Math.random()*6, r: Math.random()*Math.PI, vr: (Math.random()*2-1)*0.2,
-      c: `hsl(${Math.random()*360},90%,60%)`
-    }));
-    const t0 = performance.now();
-    function step(){
-      fxc.clearRect(0,0,innerWidth,innerHeight);
-      const t = performance.now()-t0;
-      for(const b of bits){
-        b.x+=b.vx; b.y+=b.vy; b.vy+=0.04; b.r+=b.vr;
-        fxc.save(); fxc.translate(b.x,b.y); fxc.rotate(b.r); fxc.fillStyle=b.c; fxc.fillRect(-b.w/2,-b.h/2,b.w,b.h); fxc.restore();
-      }
-      if (t < 1800) requestAnimationFrame(step); else fxc.clearRect(0,0,innerWidth,innerHeight);
-    }
-    step();
-  }
 })();
 </script>
 </body>
