@@ -13,282 +13,316 @@ const server = http.createServer(app);
 const io = new Server(server);
 
 const PORT = process.env.PORT || 3000;
-
 app.use(express.static(path.join(__dirname, "public")));
-app.get("/health", (_, res) => res.status(200).send("ok"));
+app.get("/health", (_,res)=>res.status(200).send("ok"));
 
-/** @type {Record<string, Room>} */
-const rooms = Object.create(null);
-
-const WORDS = [
-  "apple","banana","guitar","rocket","puzzle","castle","dragon","bridge","island","piano",
-  "forest","camera","butterfly","rainbow","octopus","mountain","computer","headphones","turtle",
-  "football","strawberry","robot","airplane","hamburger","diamond","skateboard","magnet","lantern",
-  "candle","backpack","submarine","umbrella","pyramid","tornado","compass","violin","mermaid","snowman"
-];
-
+/** STATE **/
 /**
- * @typedef {{ id:string, name:string, connected:boolean, ready:boolean, socketId:string, drawsDone:number }} Player
+ * @typedef {{id:string, name:string, avatar:string, putter:string, ready:boolean, connected:boolean, socketId:string, strokes:number[], total:number}} Player
  * @typedef {{
- *  id:string, hostId:string|null,
- *  state:'lobby'|'roundStart'|'drawing'|'roundEnd'|'gameOver',
- *  players: Player[],
- *  leaderboard: Record<string, number>,
- *  drawerQueue: string[],
- *  roundIndex: number,
- *  current: null | {
- *    drawerId:string, word:string, masked:string, revealed:Set<number>,
- *    choices:string[], startAt:number, timer?:NodeJS.Timeout, secondsLeft:number,
- *    guesses: Record<string, {correct:boolean, timeLeft?:number, hintsUsed?:number}>,
- *    hintsUsed:number
- *  }
+ *  id:string, hostId:string|null, state:'lobby'|'playing'|'holeEnd'|'gameOver',
+ *  players: Player[], chat: any[],
+ *  holeIndex:number, // 0..8 (we start with 1 sample hole, but keep API 9-hole ready)
+ *  turnIndex:number, // index into players array
+ *  physics: null | { running:boolean, x:number, y:number, vx:number, vy:number },
  * }} Room
  */
 
+/** memory store */
+const rooms = Object.create(null);
 const uid = () => crypto.randomBytes(8).toString("hex");
-const now = () => Date.now();
-const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-const shuffle = (a)=>{ for(let i=a.length-1;i>0;i--){ const j=(Math.random()*(i+1))|0; [a[i],a[j]]=[a[j],a[i]];} return a;};
 
 function getRoom(id){
   if(!rooms[id]){
-    rooms[id] = { id, hostId:null, state:"lobby", players:[], leaderboard:{}, drawerQueue:[], roundIndex:0, current:null };
+    rooms[id] = {
+      id, hostId: null, state: "lobby",
+      players: [],
+      chat: [],
+      holeIndex: 0,
+      turnIndex: 0,
+      physics: null
+    };
   }
   return rooms[id];
 }
-function activePlayers(room){ return room.players.filter(p=>p.connected); }
-function publicPlayer(p){ return { id:p.id, name:p.name, ready:p.ready, connected:p.connected }; }
-function broadcastRoom(room){
-  // 🧹 show ONLY active players
-  const actives = activePlayers(room);
-  io.to(room.id).emit("room:state", {
-    id: room.id,
-    state: room.state,
-    hostId: room.hostId,
-    players: actives.map(publicPlayer),
-    leaderboard: room.leaderboard,
-    roundIndex: room.roundIndex,
-    drawerId: room.current?.drawerId || null,
-    masked: room.current?.masked || null,
-    secondsLeft: room.current?.secondsLeft || 0
+const activePlayers = r => r.players.filter(p => p.connected);
+
+/** COURSE DATA (MVP: 1 hole) **/
+const HOLES = [
+  {
+    par: 3,
+    // start position & cup
+    start: { x: 140, y: 260 },
+    cup: { x: 700, y: 260, r: 12 },
+    // axis-aligned walls as rectangles [x,y,w,h]
+    walls: [
+      [80, 120, 680, 20],   // top boundary
+      [80, 380, 680, 20],   // bottom boundary
+      [80, 120, 20, 280],   // left wall
+      [760,120, 20, 280],   // right wall
+      // a choke in the middle
+      [380,120, 20, 120],
+      [380,280, 20, 120],
+    ]
+  }
+];
+
+/** Broadcast room (lobby details only) **/
+function broadcastRoom(r){
+  io.to(r.id).emit("room:state", {
+    id: r.id,
+    state: r.state,
+    hostId: r.hostId,
+    players: activePlayers(r).map(p=>({
+      id:p.id, name:p.name, avatar:p.avatar, putter:p.putter, ready:p.ready
+    })),
+    holeIndex: r.holeIndex,
+    turnIndex: r.turnIndex
   });
 }
 
-function chooseThreeWords(){
-  const picks=[]; while(picks.length<3){ const w=WORDS[(Math.random()*WORDS.length)|0]; if(!picks.includes(w)&&w.length>=3&&w.length<=12) picks.push(w); }
-  return picks;
-}
-function maskWord(word, revealed=new Set()){
-  return word.split("").map((ch,i)=>ch===" "?" ":revealed.has(i)?ch.toUpperCase():"_").join("");
+function resetScores(p){
+  p.strokes = Array(HOLES.length).fill(0);
+  p.total = 0;
 }
 
-// Build a drawer queue where each active player appears 3 times, shuffled
-function buildQueue(room){
-  const ids = activePlayers(room).map(p=>p.id);
-  const q=[]; for(let i=0;i<3;i++) q.push(...ids);
-  return shuffle(q);
-}
-
-// Remove disconnected players from queue
-function pruneQueue(room){
-  const aliveIds = new Set(activePlayers(room).map(p=>p.id));
-  room.drawerQueue = room.drawerQueue.filter(id => aliveIds.has(id));
-}
-
-function startGame(room){
-  const ps = activePlayers(room); if(ps.length<2) return false;
-  room.leaderboard = {}; for(const p of ps){ room.leaderboard[p.id]=0; p.drawsDone=0; }
-  room.drawerQueue = buildQueue(room);
-  room.roundIndex=0;
-  room.state="roundStart";
-  startRound(room);
+/** Start game **/
+function startGame(r){
+  const ps = activePlayers(r);
+  if(ps.length < 1) return false;
+  ps.forEach(resetScores);
+  r.holeIndex = 0;
+  r.turnIndex = 0;
+  r.state = "playing";
+  startHole(r);
   return true;
 }
 
-function startRound(room){
-  clearTimer(room);
-
-  // keep queue clean and skip to next active
-  pruneQueue(room);
-
-  // if queue empty → game over
-  if(room.drawerQueue.length===0){
-    room.state="gameOver"; broadcastRoom(room);
-    io.to(room.id).emit("game:over",{ leaderboard: room.leaderboard });
-    return;
-  }
-
-  // pick next active drawer
-  let drawerId = null;
-  while(room.drawerQueue.length && !drawerId){
-    const candidate = room.drawerQueue.shift();
-    const p = room.players.find(x=>x.id===candidate && x.connected);
-    if (p) { drawerId = p.id; p.drawsDone = (p.drawsDone||0)+1; }
-  }
-  if(!drawerId){
-    // everyone disconnected? go to lobby
-    room.state="lobby"; broadcastRoom(room); return;
-  }
-
-  room.state="roundStart"; room.roundIndex++;
-
-  room.current = {
-    drawerId, word:"", masked:"", revealed:new Set(), choices:chooseThreeWords(),
-    startAt: now(), secondsLeft: 60, hintsUsed:0, timer: undefined,
-    guesses: Object.fromEntries(room.players.map(p=>[p.id,{correct:false}]))
-  };
-
-  broadcastRoom(room);
-  const sockId = room.players.find(p=>p.id===drawerId)?.socketId;
-  if(sockId) io.to(sockId).emit("round:choices", { choices: room.current.choices });
+/** Start hole **/
+function startHole(r){
+  const hole = HOLES[r.holeIndex];
+  // reset per-hole positions and physics state
+  r.physics = { running:false, x: hole.start.x, y: hole.start.y, vx:0, vy:0 };
+  // inform clients of hole layout
+  io.to(r.id).emit("hole:start", { holeIndex: r.holeIndex, hole });
+  announceTurn(r);
 }
 
-function clearTimer(room){ if(room.current?.timer){ clearInterval(room.current.timer); room.current.timer=undefined; } }
-
-function revealLetters(room){
-  const cur = room.current; if(!cur) return;
-  const w = cur.word, list=[];
-  for(let i=0;i<w.length;i++){ if(w[i]!==" " && !cur.revealed.has(i)) list.push(i); }
-  if(!list.length) return;
-  const i = list[(Math.random()*list.length)|0]; cur.revealed.add(i);
-  cur.masked = maskWord(w, cur.revealed);
-  io.to(room.id).emit("hint:reveal",{ indices:[i], masked: cur.masked });
+/** Announce whose turn **/
+function announceTurn(r){
+  const players = activePlayers(r);
+  if (players.length === 0) { r.state = "lobby"; broadcastRoom(r); return; }
+  if (r.turnIndex >= players.length) r.turnIndex = 0;
+  const pid = players[r.turnIndex].id;
+  io.to(r.id).emit("turn:begin", { playerId: pid });
+  broadcastRoom(r);
 }
 
-function scoreRound(room){
-  const cur = room.current; if(!cur) return { perPlayer: [], best:null };
-  const drawerId = cur.drawerId;
-  const guessers = activePlayers(room).filter(p=>p.id!==drawerId);
-  const G = guessers.length || 1;
-  const perPlayer = []; const times=[]; let C=0;
+/** Next player's turn or next hole **/
+function nextTurnOrHole(r, sunk=false){
+  const players = activePlayers(r);
+  if (players.length === 0) { r.state = "lobby"; broadcastRoom(r); return; }
+  if (sunk || r.players.every(p => p.strokes[r.holeIndex] >= 6)) {
+    // End of hole
+    r.state = "holeEnd";
+    const results = r.players.map(p=>({
+      id:p.id, name:p.name, strokes:p.strokes[r.holeIndex], total: p.total
+    }));
+    io.to(r.id).emit("hole:end", { holeIndex: r.holeIndex, par: HOLES[r.holeIndex].par, results });
+    broadcastRoom(r);
+    // Progress after delay
+    setTimeout(()=>{
+      r.holeIndex++;
+      if (r.holeIndex >= HOLES.length) {
+        r.state = "gameOver";
+        const board = r.players.map(p=>({id:p.id, name:p.name, total:p.total}));
+        io.to(r.id).emit("game:over", { leaderboard: board });
+        broadcastRoom(r);
+        return;
+      }
+      r.state = "playing";
+      r.turnIndex = 0;
+      startHole(r);
+    }, 3000);
+  } else {
+    // Next player's turn
+    r.turnIndex = (r.turnIndex + 1) % players.length;
+    r.physics.running = false;
+    announceTurn(r);
+  }
+}
 
-  for(const g of guessers){
-    const gi = cur.guesses[g.id]; if(gi?.correct){
-      C++;
-      const t = clamp(gi.timeLeft ?? 0, 0, 60);
-      const hintsUsed = clamp(gi.hintsUsed ?? 0, 0, 3);
-      const revealPenalty = 3 - hintsUsed;
-      let pts = 200*(t/60) + 30*revealPenalty;
-      pts = clamp(Math.round(pts), 0, 250);
-      room.leaderboard[g.id] = (room.leaderboard[g.id]||0) + pts;
-      perPlayer.push({ id:g.id, name: g.name, points: pts });
-      times.push(t);
+/** Physics & shot handling **/
+function handleShot(r, playerId, vec){
+  const players = activePlayers(r);
+  if (players.length === 0) return;
+  const current = players[r.turnIndex];
+  if (!current || current.id !== playerId) return; // only current player may shoot
+
+  // inc strokes, clamp to 6 max
+  const hi = r.holeIndex;
+  current.strokes[hi] = Math.min((current.strokes[hi] || 0) + 1, 6);
+
+  const hole = HOLES[hi];
+  const ph = r.physics;
+  if (!ph) return;
+  // launch from current ball pos with vec (already power-limited client-side)
+  ph.vx = vec.vx;
+  ph.vy = vec.vy;
+  ph.running = true;
+
+  // Authoritative sim loop
+  const FRIC = 0.985; // friction per tick
+  const STOP = 3;     // speed threshold to stop
+  const TICK = 1000/60;
+  const cup = hole.cup;
+
+  function rectsCollide(x, y, r, rect){
+    const [rx,ry,rw,rh] = rect;
+    const nx = Math.max(rx, Math.min(x, rx+rw));
+    const ny = Math.max(ry, Math.min(y, ry+rh));
+    const dx = x - nx, dy = y - ny;
+    return (dx*dx + dy*dy) <= r*r;
+  }
+
+  const ballR = 8;
+
+  const timer = setInterval(()=>{
+    if (!r.physics?.running) { clearInterval(timer); return; }
+
+    // integrate
+    ph.x += ph.vx * (TICK/16);
+    ph.y += ph.vy * (TICK/16);
+
+    // collide with walls
+    for (const w of hole.walls) {
+      if (rectsCollide(ph.x, ph.y, ballR, w)) {
+        // simple reflect: determine which side we hit more
+        const [rx,ry,rw,rh] = w;
+        const prevX = ph.x - ph.vx * (TICK/16);
+        const prevY = ph.y - ph.vy * (TICK/16);
+
+        const hitLeft = prevX <= rx && ph.x > rx;
+        const hitRight = prevX >= rx+rw && ph.x < rx+rw;
+        const hitTop = prevY <= ry && ph.y > ry;
+        const hitBottom = prevY >= ry+rh && ph.y < ry+rh;
+
+        if (hitLeft || hitRight) ph.vx *= -0.85;
+        if (hitTop || hitBottom) ph.vy *= -0.85;
+
+        // push ball out of wall a tiny bit
+        if (hitLeft) ph.x = rx - ballR - 1;
+        if (hitRight) ph.x = rx+rw + ballR + 1;
+        if (hitTop) ph.y = ry - ballR - 1;
+        if (hitBottom) ph.y = ry+rh + ballR + 1;
+
+        io.to(r.id).emit("fx:bonk");
+      }
     }
-  }
-  const avgT = times.length ? times.reduce((a,b)=>a+b,0)/times.length : 0;
-  let drawerPts = clamp(Math.round(250*( (C/G) + (avgT/60) )), 0, 500);
-  room.leaderboard[drawerId] = (room.leaderboard[drawerId]||0) + drawerPts;
-  const drawerName = room.players.find(p=>p.id===drawerId)?.name || "Drawer";
-  perPlayer.push({ id:drawerId, name:drawerName, points: drawerPts });
 
-  const best = perPlayer.slice().sort((a,b)=>b.points-a.points)[0] || null;
-  return { perPlayer, best };
-}
+    // friction
+    ph.vx *= FRIC;
+    ph.vy *= FRIC;
 
-function startDrawing(room, chosenWord){
-  const cur = room.current; if(!cur) return;
-  cur.word = chosenWord.toLowerCase(); cur.revealed = new Set(); cur.masked = maskWord(cur.word, cur.revealed);
-  room.state="drawing"; cur.startAt=now(); cur.secondsLeft=60; cur.hintsUsed=0;
-  broadcastRoom(room);
-  io.to(room.id).emit("round:start", { drawerId: cur.drawerId, masked: cur.masked, secondsLeft: cur.secondsLeft });
+    // cup check
+    const dx = ph.x - cup.x, dy = ph.y - cup.y;
+    if (dx*dx + dy*dy <= (cup.r - 2)*(cup.r - 2)) {
+      // sunk!
+      io.to(r.id).emit("ball:update", { x: cup.x, y: cup.y, vx:0, vy:0 });
+      io.to(r.id).emit("fx:cup");
+      ph.running = false;
+      clearInterval(timer);
 
-  cur.timer = setInterval(()=>{
-    if(!room.current) return clearTimer(room);
-    cur.secondsLeft = Math.max(0, cur.secondsLeft - 1);
-    if([30,20,10].includes(cur.secondsLeft)){ revealLetters(room); cur.hintsUsed++; }
-    const guessers = activePlayers(room).filter(p=>p.id!==cur.drawerId);
-    const allCorrect = guessers.length>0 && guessers.every(g=>cur.guesses[g.id]?.correct);
-    io.to(room.id).emit("tick",{ secondsLeft: cur.secondsLeft, masked: cur.masked });
-    if(cur.secondsLeft<=0 || allCorrect){
-      clearTimer(room);
-      const { perPlayer, best } = scoreRound(room);
-      room.state="roundEnd";
-      io.to(room.id).emit("round:end",{ word: cur.word.toUpperCase(), perPlayer, leaderboard: room.leaderboard, best });
-      broadcastRoom(room);
-      setTimeout(()=>startRound(room), 4000);
+      // compute scores
+      const strokes = current.strokes[hi];
+      current.total = (current.total||0) + strokes;
+      setTimeout(()=> nextTurnOrHole(r, true), 500);
+      return;
     }
-  },1000);
+
+    // stop?
+    if (Math.hypot(ph.vx, ph.vy) < STOP) {
+      ph.vx = ph.vy = 0;
+      ph.running = false;
+      io.to(r.id).emit("ball:update", { x: ph.x, y: ph.y, vx:0, vy:0 });
+      clearInterval(timer);
+
+      // stroke limit?
+      if (current.strokes[hi] >= 6) {
+        io.to(r.id).emit("fx:limit");
+      }
+      setTimeout(()=> nextTurnOrHole(r, false), 350);
+      return;
+    }
+
+    // broadcast position
+    io.to(r.id).emit("ball:update", { x: ph.x, y: ph.y, vx: ph.vx, vy: ph.vy });
+  }, TICK);
 }
 
-// ===== Sockets =====
+/** SOCKETS **/
 io.on("connection",(socket)=>{
   const roomParam = (socket.handshake.query.room||"").toString().trim();
-  const roomId = roomParam || "party";
-  const room = getRoom(roomId);
-  socket.join(room.id);
+  const roomId = roomParam || "clubhouse";
+  const r = getRoom(roomId);
+  socket.join(r.id);
 
-  const player = { id: uid(), name: "Player "+(Math.random()*90+10|0), connected:true, ready:false, socketId: socket.id, drawsDone:0 };
-  room.players.push(player);
-  if(!room.hostId) room.hostId = player.id;
+  const player = {
+    id: uid(),
+    name: "Golfer " + (Math.random()*90+10|0),
+    avatar: ["🐸","🐼","🦊","🐵","🐹","🐨","🐔","🐙","🦄","🤖"][Math.floor(Math.random()*10)],
+    putter: ["#ff6b6b","#ffd166","#4dd599","#6c77ff","#ff8ccf"][Math.floor(Math.random()*5)],
+    ready: false,
+    connected: true,
+    socketId: socket.id,
+    strokes: [],
+    total: 0
+  };
+  r.players.push(player);
+  if (!r.hostId) r.hostId = player.id;
 
-  socket.emit("room:joined",{ roomId: room.id, playerId: player.id, hostId: room.hostId });
-  broadcastRoom(room);
+  socket.emit("room:joined", { roomId: r.id, playerId: player.id, hostId: r.hostId });
+  broadcastRoom(r);
 
-  socket.on("chat:send", ({text})=>{
-    const msg = (""+(text||"")).slice(0,200);
-    io.to(room.id).emit("chat:new",{ from: player.id, name: player.name, text: msg, ts: Date.now() });
+  // lobby
+  socket.on("player:set", ({ name, avatar, putter }) => {
+    if (typeof name === "string") player.name = name.slice(0,24) || player.name;
+    if (typeof avatar === "string") player.avatar = avatar.slice(0,2) || player.avatar;
+    if (typeof putter === "string") player.putter = putter;
+    broadcastRoom(r);
   });
-  socket.on("player:setName", ({name})=>{ player.name=(""+(name||"")).slice(0,24)||player.name; broadcastRoom(room); });
-  socket.on("player:ready", ({ready})=>{ player.ready=!!ready; broadcastRoom(room); });
-
-  socket.on("game:start", ()=>{
-    if(player.id!==room.hostId || room.state!=="lobby") return;
-    if(activePlayers(room).length>12){ socket.emit("toast",{type:"error",text:"Max 12 players"}); return; }
-    startGame(room);
-  });
-
-  socket.on("drawer:chooseWord", ({word})=>{
-    const cur=room.current; if(!cur || room.state!=="roundStart") return;
-    if(player.id!==cur.drawerId) return;
-    if(!cur.choices.includes(word)) return;
-    startDrawing(room, word);
-  });
-
-  // Forward size/color every packet (client also smooths)
-  socket.on("draw:begin",(p)=>{ if(room.current?.drawerId!==player.id || room.state!=="drawing") return; socket.to(room.id).emit("draw:begin", p); });
-  socket.on("draw:move",(p)=>{ if(room.current?.drawerId!==player.id || room.state!=="drawing") return; socket.to(room.id).emit("draw:move", p); });
-  socket.on("draw:end",(p)=>{ if(room.current?.drawerId!==player.id || room.state!=="drawing") return; socket.to(room.id).emit("draw:end", p || {}); });
-
-  socket.on("guess:submit", ({text})=>{
-    const cur=room.current; if(!cur || room.state!=="drawing") return;
-    const guess=(""+(text||"")).toLowerCase().trim(); if(!guess) return;
-    const gi = cur.guesses[player.id]; if(!gi || gi.correct) return;
-    if(guess===cur.word){
-      gi.correct=true; gi.timeLeft=cur.secondsLeft; gi.hintsUsed=cur.hintsUsed;
-      io.to(room.id).emit("guess:correct",{ playerId: player.id, name: player.name });
-      broadcastRoom(room);
-    }
+  socket.on("player:ready", ({ ready }) => {
+    player.ready = !!ready;
+    broadcastRoom(r);
   });
 
-  socket.on("play:again", ()=>{
-    if(room.state!=="gameOver") return;
-    clearTimer(room);
-    room.state="lobby"; room.leaderboard={}; room.drawerQueue=[]; room.roundIndex=0; room.current=null;
-    for(const p of room.players) p.ready=false;
-    broadcastRoom(room);
+  socket.on("chat:send", ({ text }) => {
+    const msg = (""+(text||"")).slice(0,140);
+    io.to(r.id).emit("chat:new", { name: player.name, avatar: player.avatar, text: msg, ts: Date.now() });
+  });
+
+  socket.on("game:start", () => {
+    if (player.id !== r.hostId) return;
+    if (r.state !== "lobby") return;
+    const allReady = activePlayers(r).every(p => p.ready);
+    if (!allReady) return;
+    startGame(r);
+  });
+
+  // putting
+  socket.on("shot:putt", ({ vx, vy }) => {
+    if (r.state !== "playing") return;
+    handleShot(r, player.id, { vx, vy });
   });
 
   socket.on("disconnect", ()=>{
-    player.connected=false;
-    // if host leaves, pass host to next active
-    if(room.hostId===player.id){
-      const next = activePlayers(room)[0];
-      room.hostId = next ? next.id : null;
+    player.connected = false;
+    if (r.hostId === player.id) {
+      const next = activePlayers(r)[0];
+      r.hostId = next ? next.id : null;
     }
-    // If current drawer left, end round early
-    if(room.current?.drawerId === player.id && room.state === "drawing"){
-      clearTimer(room);
-      const { perPlayer, best } = scoreRound(room);
-      room.state="roundEnd";
-      io.to(room.id).emit("round:end",{ word: room.current.word.toUpperCase(), perPlayer, leaderboard: room.leaderboard, best });
-      broadcastRoom(room);
-      setTimeout(()=>startRound(room), 1500);
-    } else {
-      // prune queue so they don't appear again
-      pruneQueue(room);
-      broadcastRoom(room);
-    }
+    broadcastRoom(r);
   });
 });
 
-server.listen(PORT, ()=>console.log(`✅ Running on http://localhost:${PORT}`));
+server.listen(PORT, ()=>console.log(`⛳️ MiniGolf Party on http://localhost:${PORT}`));
