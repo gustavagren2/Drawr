@@ -10,21 +10,55 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server); // same origin, no CORS needed
+
+// Same-origin sockets; works on Render out of the box
+const io = new Server(server, {
+  // You can uncomment this to debug connection fallbacks:
+  // transports: ["websocket"], upgrade: true
+});
 
 const PORT = process.env.PORT || 3000;
 
 app.use(express.static(path.join(__dirname, "public")));
-app.get("/health", (_,res)=>res.status(200).send("ok"));
+app.get("/health", (_, res) => res.status(200).send("ok"));
 
+// ===== In-memory store =====
 /** @type {Record<string, Room>} */
 const rooms = Object.create(null);
 
 // Small sample word list
-const WORDS = ["apple","banana","guitar","rocket","puzzle","castle","dragon","bridge","island","piano",
+const WORDS = [
+  "apple","banana","guitar","rocket","puzzle","castle","dragon","bridge","island","piano",
   "forest","camera","butterfly","rainbow","octopus","mountain","computer","headphones","turtle",
   "football","strawberry","robot","airplane","hamburger","diamond","skateboard","magnet","lantern",
-  "candle","backpack","submarine","umbrella","pyramid","tornado","compass","violin","mermaid","snowman"];
+  "candle","backpack","submarine","umbrella","pyramid","tornado","compass","violin","mermaid","snowman"
+];
+
+// ===== Types (JSDoc)
+/**
+ * @typedef {{ id:string, name:string, connected:boolean, ready:boolean, socketId:string }} Player
+ * @typedef {{
+ *  id:string,
+ *  hostId:string|null,
+ *  state:'lobby'|'roundStart'|'drawing'|'roundEnd'|'gameOver',
+ *  players: Player[],
+ *  leaderboard: Record<string, number>,
+ *  drawerQueue: string[],
+ *  roundIndex: number,
+ *  current: null | {
+ *    drawerId:string,
+ *    word:string,
+ *    masked:string,
+ *    revealed:Set<number>,
+ *    choices:string[],
+ *    startAt:number,
+ *    timer?:NodeJS.Timeout,
+ *    secondsLeft:number,
+ *    guesses: Record<string, {correct:boolean, timeLeft?:number, hintsUsed?:number}>,
+ *    hintsUsed:number
+ *  }
+ * }} Room
+ */
 
 const uid = () => crypto.randomBytes(8).toString("hex");
 const now = () => Date.now();
@@ -49,6 +83,7 @@ function broadcastRoom(room){
     secondsLeft: room.current?.secondsLeft || 0
   });
 }
+
 function chooseThreeWords(){
   const picks=[]; while(picks.length<3){ const w=WORDS[(Math.random()*WORDS.length)|0]; if(!picks.includes(w)&&w.length>=3&&w.length<=12) picks.push(w); }
   return picks;
@@ -62,12 +97,14 @@ function nextDrawerQueue(room){
   return shuffle(q);
 }
 function alivePlayers(room){ return room.players.filter(p=>p.connected); }
+
 function startGame(room){
   const ps = alivePlayers(room); if(ps.length<2) return false;
   room.leaderboard = {}; for(const p of ps) room.leaderboard[p.id]=0;
   room.drawerQueue = nextDrawerQueue(room);
   room.roundIndex=0; room.state="roundStart"; startRound(room); return true;
 }
+
 function startRound(room){
   clearTimer(room);
   if(room.drawerQueue.length===0){
@@ -88,7 +125,47 @@ function startRound(room){
   const sockId = room.players.find(p=>p.id===drawerId)?.socketId;
   if(sockId) io.to(sockId).emit("round:choices", { choices: room.current.choices });
 }
+
 function clearTimer(room){ if(room.current?.timer){ clearInterval(room.current.timer); room.current.timer=undefined; } }
+
+function revealLetters(room){
+  const cur = room.current; if(!cur) return;
+  const w = cur.word, list=[];
+  for(let i=0;i<w.length;i++){ if(w[i]!==" " && !cur.revealed.has(i)) list.push(i); }
+  if(!list.length) return;
+  const i = list[(Math.random()*list.length)|0]; cur.revealed.add(i);
+  cur.masked = maskWord(w, cur.revealed);
+  io.to(room.id).emit("hint:reveal",{ indices:[i], masked: cur.masked });
+}
+
+function scoreRound(room){
+  const cur = room.current; if(!cur) return;
+  const drawerId = cur.drawerId;
+  const guessers = room.players.filter(p=>p.id!==drawerId && p.connected);
+  const G = guessers.length || 1;
+  const perPlayer = []; const times=[]; let C=0;
+
+  for(const g of guessers){
+    const gi = cur.guesses[g.id]; if(gi?.correct){
+      C++; const t = clamp(gi.timeLeft ?? 0, 0, 60);
+      const hintsUsed = clamp(gi.hintsUsed ?? 0, 0, 3);
+      const revealPenalty = 3 - hintsUsed;
+      let pts = 200*(t/60) + 30*revealPenalty;
+      pts = clamp(Math.round(pts), 0, 250);
+      room.leaderboard[g.id] = (room.leaderboard[g.id]||0) + pts;
+      perPlayer.push({ id:g.id, name: room.players.find(p=>p.id===g.id)?.name || g.id, points: pts });
+      times.push(t);
+    }
+  }
+  const avgT = times.length ? times.reduce((a,b)=>a+b,0)/times.length : 0;
+  let drawerPts = 250*(C/G) + 250*(avgT/60);
+  drawerPts = clamp(Math.round(drawerPts), 0, 500);
+  room.leaderboard[drawerId] = (room.leaderboard[drawerId]||0) + drawerPts;
+  const drawerName = room.players.find(p=>p.id===drawerId)?.name || "Drawer";
+  perPlayer.push({ id:drawerId, name:drawerName, points: drawerPts });
+  return perPlayer;
+}
+
 function startDrawing(room, chosenWord){
   const cur = room.current; if(!cur) return;
   cur.word = chosenWord.toLowerCase(); cur.revealed = new Set(); cur.masked = maskWord(cur.word, cur.revealed);
@@ -113,47 +190,12 @@ function startDrawing(room, chosenWord){
     }
   },1000);
 }
-function revealLetters(room){
-  const cur = room.current; if(!cur) return;
-  const w = cur.word, list=[];
-  for(let i=0;i<w.length;i++){ if(w[i]!==" " && !cur.revealed.has(i)) list.push(i); }
-  if(!list.length) return;
-  const i = list[(Math.random()*list.length)|0]; cur.revealed.add(i);
-  cur.masked = maskWord(w, cur.revealed);
-  io.to(room.id).emit("hint:reveal",{ indices:[i], masked: cur.masked });
-}
-function scoreRound(room){
-  const cur = room.current; if(!cur) return;
-  const drawerId = cur.drawerId;
-  const guessers = room.players.filter(p=>p.id!==drawerId && p.connected);
-  const G = guessers.length || 1;
-  const perPlayer = []; const times=[]; let C=0;
 
-  for(const g of guessers){
-    const gi = cur.guesses[g.id]; if(gi?.correct){
-      C++; const t = clamp(gi.timeLeft ?? 0, 0, 60);
-      const hintsUsed = clamp(gi.hintsUsed ?? 0, 0, 3);
-      const revealPenalty = 3 - hintsUsed;
-      let pts = 200*(t/60) + 30*revealPenalty;
-      pts = clamp(Math.round(pts), 0, 250);
-      room.leaderboard[g.id] = (room.leaderboard[g.id]||0) + pts;
-      perPlayer.push({ id:g.id, name: g.name, points: pts });
-      times.push(t);
-    }
-  }
-  const avgT = times.length ? times.reduce((a,b)=>a+b,0)/times.length : 0;
-  let drawerPts = 250*(C/G) + 250*(avgT/60);
-  drawerPts = clamp(Math.round(drawerPts), 0, 500);
-  room.leaderboard[drawerId] = (room.leaderboard[drawerId]||0) + drawerPts;
-  const drawerName = room.players.find(p=>p.id===drawerId)?.name || "Drawer";
-  perPlayer.push({ id:drawerId, name:drawerName, points: drawerPts });
-  return perPlayer;
-}
-
-// ========== SOCKETS ==========
+// ===== Sockets =====
 io.on("connection",(socket)=>{
+  // Default to a shared room "party" if no ?room=
   const roomParam = (socket.handshake.query.room||"").toString().trim();
-  const roomId = roomParam || uid().slice(0,6);
+  const roomId = roomParam || "party";
   const room = getRoom(roomId);
   socket.join(room.id);
 
@@ -164,19 +206,22 @@ io.on("connection",(socket)=>{
   socket.emit("room:joined",{ roomId: room.id, playerId: player.id, hostId: room.hostId });
   broadcastRoom(room);
 
+  // Chat / Lobby
   socket.on("chat:send", ({text})=>{
     const msg = (""+(text||"")).slice(0,200);
-    io.to(room.id).emit("chat:new",{ from: player.id, name: player.name, text: msg, ts: Date.now() });
+    io.to(room.id).emit("chat:new",{ from: player.id, name: room.players.find(p=>p.id===player.id)?.name || "Player", text: msg, ts: Date.now() });
   });
   socket.on("player:setName", ({name})=>{ player.name=(""+(name||"")).slice(0,24)||player.name; broadcastRoom(room); });
   socket.on("player:ready", ({ready})=>{ player.ready=!!ready; broadcastRoom(room); });
 
+  // Start
   socket.on("game:start", ()=>{
     if(player.id!==room.hostId || room.state!=="lobby") return;
     if(room.players.length>12){ socket.emit("toast",{type:"error",text:"Max 12 players"}); return; }
     startGame(room);
   });
 
+  // Drawer chooses word
   socket.on("drawer:chooseWord", ({word})=>{
     const cur=room.current; if(!cur || room.state!=="roundStart") return;
     if(player.id!==cur.drawerId) return;
@@ -184,15 +229,18 @@ io.on("connection",(socket)=>{
     startDrawing(room, word);
   });
 
-  socket.on("draw:begin",(p)=>{ if(room.current?.drawerId!==player.id || room.state!=="drawing") return; socket.to(room.id).emit("draw:begin",p); });
-  socket.on("draw:move",(p)=>{ if(room.current?.drawerId!==player.id || room.state!=="drawing") return; socket.to(room.id).emit("draw:move",p); });
-  socket.on("draw:end",(p)=>{ if(room.current?.drawerId!==player.id || room.state!=="drawing") return; socket.to(room.id).emit("draw:end",p); });
+  // Drawing relays — forward size/color each time
+  socket.on("draw:begin",(p)=>{ if(room.current?.drawerId!==player.id || room.state!=="drawing") return; socket.to(room.id).emit("draw:begin", p); });
+  socket.on("draw:move",(p)=>{ if(room.current?.drawerId!==player.id || room.state!=="drawing") return; socket.to(room.id).emit("draw:move", p); });
+  socket.on("draw:end",(p)=>{ if(room.current?.drawerId!==player.id || room.state!=="drawing") return; socket.to(room.id).emit("draw:end", p || {}); });
 
+  // Guessing
   socket.on("guess:submit", ({text})=>{
     const cur=room.current; if(!cur || room.state!=="drawing") return;
     const guess=(""+(text||"")).toLowerCase().trim(); if(!guess) return;
     const gi = cur.guesses[player.id]; if(!gi || gi.correct) return;
-    if(guess===cur.word){ gi.correct=true; gi.timeLeft=cur.secondsLeft; gi.hintsUsed=cur.hintsUsed;
+    if(guess===cur.word){
+      gi.correct=true; gi.timeLeft=cur.secondsLeft; gi.hintsUsed=cur.hintsUsed;
       io.to(room.id).emit("guess:correct",{ playerId: player.id, name: player.name }); broadcastRoom(room);
     }
   });
