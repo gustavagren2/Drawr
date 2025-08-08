@@ -1,494 +1,373 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Draw & Guess – Multiplayer</title>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>MiniGolf Party</title>
 <style>
-  :root { --bg:#0b0f1a; --panel:#0f1528; --panel2:#0b1120; --ink:#e8eefc; --brand:#7ab8ff; --accent:#56ffa9; --warn:#ffd166; }
-  html, body { margin:0; height:100%; background:var(--bg); color:var(--ink); font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; }
-  .wrap { display:grid; grid-template-rows:auto 1fr; height:100%; }
-  header { display:flex; gap:8px; align-items:center; padding:10px 12px; background:linear-gradient(180deg,#0e1430,#0a0f22); border-bottom:1px solid rgba(150,180,255,.2); }
-  header .title { font-weight:800; }
-  header .room { margin-left:auto; font-size:13px; opacity:.9; }
-  header .btn { margin-left:6px; padding:6px 10px; background:#0e1540; border:1px solid rgba(150,180,255,.3); border-radius:8px; color:var(--ink); cursor:pointer; }
-  main { display:grid; grid-template-columns:320px 1fr 320px; gap:12px; padding:12px; }
-  .panel { background:var(--panel); border:1px solid rgba(150,180,255,.18); border-radius:12px; overflow:hidden; display:flex; flex-direction:column; box-shadow:0 8px 30px rgba(0,0,0,.25); }
-  .panel header { padding:8px 10px; background:var(--panel2); border-bottom:1px solid rgba(150,180,255,.18); }
-  .panel .body { padding:10px; flex:1; overflow:auto; }
-  .panel .foot { padding:10px; border-top:1px solid rgba(150,180,255,.18); display:flex; gap:8px; align-items:center; }
-  .input { border-radius:10px; border:1px solid rgba(150,180,255,.3); background:#0b1022; color:var(--ink); padding:8px 10px; }
-  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-  .list { list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:6px; }
-  .chip { padding:4px 8px; background:#0c1228; border:1px solid rgba(150,180,255,.2); border-radius:999px; display:inline-flex; gap:6px; align-items:center; }
-  .readyDot { width:10px; height:10px; border-radius:50%; background:#5fff87; display:inline-block; box-shadow:0 0 10px rgba(95,255,135,.6); }
-  .notready { background:#666; box-shadow:none; }
-  .canvasWrap { background:var(--panel); border:1px solid rgba(150,180,255,.18); border-radius:12px; display:grid; grid-template-rows:auto 1fr auto; overflow:hidden; box-shadow:0 8px 30px rgba(0,0,0,.25); }
-  .toolbar { display:flex; gap:8px; padding:8px; background:var(--panel2); border-bottom:1px solid rgba(150,180,255,.18); align-items:center; flex-wrap:wrap; }
-  .tool { padding:6px 10px; border:1px solid rgba(150,180,255,.3); border-radius:8px; background:#0b1022; cursor:pointer; }
-  .tool.active { outline:2px solid var(--brand); }
-  #board { background:#070c18; display:block; width:100%; height:100%; cursor: crosshair; }
-  .slots { font-size:20px; text-align:center; padding:8px; background:#0b1120; border-top:1px solid rgba(150,180,255,.2); }
-  .timer { font-weight:800; transition: transform .2s; }
-  .timer.low { color:var(--warn); transform: scale(1.1); }
-  .mask { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; letter-spacing: 2px; }
-  .choices { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
-  .choice { padding:10px 12px; background:#162044; border:1px solid rgba(150,180,255,.35); border-radius:10px; cursor:pointer; }
-  .leader li { display:flex; justify-content:space-between; gap:10px; }
-  .correctList { display:flex; gap:6px; flex-wrap:wrap; }
-  .modal { position:fixed; inset:0; display:none; place-items:center; background:rgba(0,0,0,.55); }
-  .modal .card { width:min(560px, calc(100vw - 32px)); background:var(--panel); border:1px solid rgba(150,180,255,.28); border-radius:14px; padding:16px; box-shadow:0 20px 60px rgba(0,0,0,.4); }
+  :root { --bg:#0b0f1a; --panel:#101935; --panel2:#0d1430; --ink:#e8eefc; --brand:#7ab8ff; --accent:#56ffa9; --warn:#ffd166; }
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial;}
+  .wrap{display:grid;grid-template-rows:auto 1fr; height:100%;}
+  header{display:flex;gap:8px;align-items:center;padding:10px 12px;background:linear-gradient(180deg,#111a44,#0b1128);border-bottom:1px solid rgba(150,180,255,.2)}
+  header .title{font-weight:800}
+  header .right{margin-left:auto;display:flex;gap:8px;align-items:center}
+  .btn{border:1px solid rgba(150,180,255,.3);background:#13204a;color:var(--ink);padding:7px 10px;border-radius:10px;cursor:pointer}
+  .btn.primary{background:var(--brand);color:#061022;border:none;font-weight:700}
+  main{display:grid;grid-template-columns:320px 1fr 320px;gap:12px;padding:12px}
+  .panel{background:var(--panel);border:1px solid rgba(150,180,255,.18);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+  .panel header{padding:8px 10px;background:var(--panel2);border-bottom:1px solid rgba(150,180,255,.18);font-weight:700}
+  .panel .body{padding:10px;flex:1;overflow:auto}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .input{background:#0d1636;border:1px solid rgba(150,180,255,.25);color:var(--ink);border-radius:10px;padding:8px 10px}
+  .list{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:6px}
+  .chip{padding:4px 8px;background:#0c1228;border:1px solid rgba(150,180,255,.2);border-radius:999px}
+  .ready{color:#5fff87}
+  #course{background:#071225;border-radius:12px;border:1px solid rgba(150,180,255,.2);display:block;width:100%;height:100%}
+  .small{opacity:.85;font-size:12px}
+  .avatarOpt{cursor:pointer;padding:6px 8px;border:1px solid transparent;border-radius:10px}
+  .avatarOpt.active{border-color:var(--brand);background:#0d1a44}
+  .putter{width:20px;height:20px;border-radius:4px;border:2px solid rgba(255,255,255,.5);cursor:pointer}
+  .putter.active{outline:2px solid var(--brand)}
+  .score{display:grid;grid-template-columns:1fr auto;gap:6px}
+  .score .me{color:#ffd166}
+  .toast{position:fixed;left:50%;top:16px;transform:translateX(-50%);background:#13204a;border:1px solid rgba(150,180,255,.3);color:var(--ink);padding:8px 12px;border-radius:10px;display:none}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <header>
-    <div class="title">✏️ Draw & Guess</div>
-    <div class="room">Room: <span id="roomId">—</span></div>
-    <button id="copyLink" class="btn">Copy Link</button>
-    <button id="btnStart" class="btn">Start (host)</button>
-    <button id="btnAgain" class="btn" style="display:none;">Play again</button>
-    <button id="btnSound" class="btn">🔈 Sound: Off</button>
-  </header>
-  <main>
-    <section class="panel" id="leftPanel">
-      <header>Lobby</header>
-      <div class="body" id="lobbyBody">
-        <div class="row" style="margin-bottom:10px;">
-          <input id="inpName" class="input" placeholder="Your name" />
-          <button id="btnSetName" class="btn">Set</button>
-          <label class="chip"><input type="checkbox" id="chkReady" /> Ready</label>
-        </div>
-        <div><strong>Players</strong></div>
-        <ul id="players" class="list"></ul>
-        <hr style="border-color:rgba(150,180,255,.15); border-style:solid; border-width:0 0 1px; margin:12px 0;">
-        <div><strong>Chat</strong></div>
-        <div id="chat" style="height:160px; overflow:auto; background:#0a0f1e; border:1px solid rgba(150,180,255,.18); border-radius:8px; padding:8px;"></div>
-        <div class="row" style="margin-top:8px;">
-          <input id="inpChat" class="input" placeholder="Message…" style="flex:1;" />
-          <button id="btnChat" class="btn">Send</button>
-        </div>
+<header>
+  <div class="title">⛳️ MiniGolf Party</div>
+  <div id="holeInfo">Hole — / Par —</div>
+  <div class="right">
+    <span>Room: <strong id="roomId">—</strong></span>
+    <button id="btnSound" class="btn">🔈 Sound Off</button>
+    <button id="btnStart" class="btn primary">Start (host)</button>
+  </div>
+</header>
+<main>
+  <!-- Left: Lobby -->
+  <section class="panel">
+    <header>Lobby</header>
+    <div class="body" id="lobbyBody">
+      <div class="row">
+        <input id="inpName" class="input" placeholder="Your name" style="flex:1;"/>
+        <button id="btnSet" class="btn">Set</button>
+      </div>
+      <div style="margin-top:8px;"><strong>Choose Avatar</strong></div>
+      <div id="avatars" class="row" style="margin-top:4px;"></div>
+      <div style="margin-top:8px;"><strong>Choose Putter</strong></div>
+      <div id="putters" class="row" style="margin-top:4px;"></div>
+
+      <div class="row" style="margin-top:10px;">
+        <label class="chip"><input type="checkbox" id="chkReady"> Ready</label>
       </div>
 
-      <div class="body" id="roundSidebar" style="display:none;">
-        <div class="row" style="justify-content:space-between;">
-          <div><strong>Round</strong> <span id="roundIndex">1</span></div>
-          <div class="timer" id="timer">⏱ <span id="secondsLeft">60</span>s</div>
-        </div>
-        <div style="margin-top:10px;">Word: <span class="mask" id="masked">_ _ _ _</span></div>
-        <div style="margin-top:12px;"><strong>Correct guessers</strong></div>
-        <div id="correctList" class="correctList"></div>
-        <div style="margin-top:12px;"><strong>Leaderboard</strong></div>
-        <ul id="leader" class="list leader"></ul>
-      </div>
-      <div class="foot"><span>Host can start when ready. Max 12 players.</span></div>
-    </section>
+      <hr style="opacity:.2;margin:12px 0">
+      <div><strong>Players</strong></div>
+      <ul id="players" class="list"></ul>
 
-    <section class="canvasWrap">
-      <div class="toolbar">
-        <div class="row">
-          <button class="tool" data-tool="brush">🖊️ Brush</button>
-          <button class="tool" data-tool="eraser">🧽 Eraser</button>
-          <button class="tool" data-tool="bucket">🪣 Bucket</button>
-        </div>
-        <div style="margin-left:auto;" class="row">
-          <span>Size</span>
-          <button class="btn" id="penMinus">-</button>
-          <span id="penSize" class="chip">6</span>
-          <button class="btn" id="penPlus">+</button>
-          <span style="margin-left:8px;">Color</span>
-          <input type="color" id="penColor" value="#ffffff" />
-          <button class="btn" id="btnClear" style="margin-left:8px;">Clear</button>
-        </div>
+      <hr style="opacity:.2;margin:12px 0">
+      <div><strong>Chat</strong></div>
+      <div id="chat" style="height:160px;overflow:auto;background:#0b1430;border:1px solid rgba(150,180,255,.2);border-radius:10px;padding:8px;"></div>
+      <div class="row" style="margin-top:6px;">
+        <input id="inpChat" class="input" placeholder="Message…" style="flex:1;"/>
+        <button id="btnChat" class="btn">Send</button>
       </div>
-      <canvas id="board"></canvas>
-      <div class="slots"><input id="guessInput" class="input" style="width:100%; text-align:center;" placeholder="Type your guess and press Enter…" /></div>
-    </section>
+    </div>
+  </section>
 
-    <section class="panel"><header>Leaderboard</header><div class="body"><ul id="leader2" class="list leader"></ul></div></section>
-  </main>
+  <!-- Center: Game -->
+  <section class="panel" style="grid-template-rows:auto 1fr">
+    <header id="turnHeader">Waiting…</header>
+    <div class="body" style="padding:0;display:grid;grid-template-rows:1fr 44px">
+      <canvas id="course"></canvas>
+      <div class="row" style="padding:6px 8px;background:#0d1430;border-top:1px solid rgba(150,180,255,.2)">
+        <div class="chip small" id="powerLabel">Power: 0%</div>
+        <div class="chip small">Drag from the ball to aim</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Right: Scoreboard -->
+  <section class="panel">
+    <header>Scoreboard</header>
+    <div class="body">
+      <div id="miniScore" class="score"></div>
+      <hr style="opacity:.2;margin:10px 0">
+      <div id="tips" class="small">Tip: Aim by dragging from your ball. Release to putt. Lowest strokes wins!</div>
+    </div>
+  </section>
+</main>
 </div>
 
-<!-- Drawer word choices -->
-<div class="modal" id="modalChoices"><div class="card"><h3>Choose a word to draw (60s)</h3><div class="choices" id="choiceList"></div></div></div>
-
-<!-- Round results -->
-<div class="modal" id="modalRound"><div class="card">
-  <h3>Round Results</h3>
-  <p>Word: <strong id="resWord">—</strong></p>
-  <p>Top scorer: <strong id="resTop">—</strong></p>
-  <ul id="resList" class="list leader" style="margin-top:8px;"></ul>
-</div></div>
-
-<!-- Game Over -->
-<div class="modal" id="modalOver"><div class="card">
-  <h2>Game Over 🎉</h2>
-  <p>Winner: <strong id="winnerName">—</strong></p>
-  <ul id="finalBoard" class="list leader" style="margin-top:8px;"></ul>
-  <div style="margin-top:12px;"><button id="btnAgainModal" class="btn">Play again</button></div>
-</div></div>
+<div class="toast" id="toast">Toast</div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
 (() => {
-  // Default room
-  const urlParams = new URLSearchParams(location.search);
-  let room = urlParams.get("room") || "party";
-  if (!urlParams.get("room")) { urlParams.set("room", room); history.replaceState(null, "", "?" + urlParams.toString()); }
-
-  // Force WS
+  // ----- ROOM / SOCKET -----
+  const url = new URL(location.href);
+  const room = url.searchParams.get("room") || "clubhouse";
+  if (!url.searchParams.get("room")) {
+    url.searchParams.set("room", room);
+    history.replaceState(null, "", url.toString());
+  }
   const socket = io({ query: { room }, transports: ["websocket"], upgrade: true });
 
-  // ---- SFX (WebAudio tiny synth) ----
-  let sfxOn = false, ac = null;
-  const btnSound = document.getElementById('btnSound');
-  btnSound.onclick = () => {
-    sfxOn = !sfxOn;
-    if (sfxOn && !ac) ac = new (window.AudioContext || window.webkitAudioContext)();
-    btnSound.textContent = sfxOn ? "🔊 Sound: On" : "🔈 Sound: Off";
-  };
-  function tone(freq=440, dur=0.15, type='sine', gain=0.03){
-    if (!sfxOn || !ac) return;
-    const o = ac.createOscillator(), g = ac.createGain();
-    o.type = type; o.frequency.value = freq;
-    o.connect(g); g.connect(ac.destination);
-    const t = ac.currentTime;
-    g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(gain, t+0.01);
-    g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+  // ----- SIMPLE AUDIO (WebAudio) -----
+  let ac=null, sfxOn=false;
+  const btnSound = document.getElementById("btnSound");
+  btnSound.onclick = () => { sfxOn = !sfxOn; if(sfxOn && !ac) ac = new (window.AudioContext||window.webkitAudioContext)(); btnSound.textContent = sfxOn ? "🔊 Sound On" : "🔈 Sound Off"; };
+  function blip(freq=880, dur=0.07, type='square', gain=0.04){
+    if(!sfxOn||!ac) return;
+    const o=ac.createOscillator(), g=ac.createGain();
+    o.type=type; o.frequency.value=freq; o.connect(g); g.connect(ac.destination);
+    const t=ac.currentTime; g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(gain,t+0.01); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
     o.start(t); o.stop(t+dur+0.05);
   }
   const sfx = {
-    start: ()=>{ tone(660,0.12,'square',0.05); setTimeout(()=>tone(880,0.1,'square',0.04),80); },
-    correct: ()=>{ tone(800,0.08,'triangle',0.05); setTimeout(()=>tone(1200,0.08,'triangle',0.04),70); },
-    warn: ()=>{ tone(300,0.07,'sawtooth',0.05); },
-    end: ()=>{ tone(220,0.18,'square',0.06); }
+    start:()=>{ blip(660,0.12,'square',0.05); setTimeout(()=>blip(990,0.10,'square',0.05),90); },
+    hit:(p)=>{ blip(200+400*p,0.06,'triangle',0.05); },
+    bonk:()=> blip(300,0.08,'sawtooth',0.04),
+    cup:()=>{ blip(800,0.08,'triangle',0.05); setTimeout(()=>blip(1200,0.1,'triangle',0.05),70); },
+    limit:()=> blip(180,0.25,'square',0.05),
+    turn:()=> blip(520,0.08,'square',0.04)
   };
+  // looped 8-bit-ish background
+  let musicTimer=null;
+  function musicStart(){
+    if(!sfxOn) return;
+    if(!ac) ac = new (window.AudioContext||window.webkitAudioContext)();
+    const seq = [330,0,392,0,494,0,392,0,  330,0,392,0,523,0,494,0]; // tiny loop
+    let i=0;
+    musicTimer = setInterval(()=>{ const f=seq[i%seq.length]; if(f) blip(f,0.12,'square',0.02); i++; }, 220);
+  }
+  function musicStop(){ if(musicTimer){ clearInterval(musicTimer); musicTimer=null; } }
 
-  // ---- State & UI refs ----
-  let me={id:null, hostId:null}, players=[], leaderboard={}, state="lobby";
-  let drawerId=null, amDrawer=false, secondsLeft=60, masked="", correctSet=new Set();
+  // ----- STATE -----
+  let me={id:null, hostId:null};
+  let players=[]; let state="lobby"; let holeIndex=0; let turnPlayerId=null;
+  let hole=null;
 
-  const roomIdEl = document.getElementById("roomId");
-  const copyLinkBtn = document.getElementById("copyLink");
+  // ----- UI REFS -----
+  const roomIdEl = document.getElementById("roomId"); roomIdEl.textContent = room;
   const btnStart = document.getElementById("btnStart");
-  const btnAgain = document.getElementById("btnAgain");
+  const inpName = document.getElementById("inpName");
+  const btnSet = document.getElementById("btnSet");
+  const chkReady = document.getElementById("chkReady");
   const playersEl = document.getElementById("players");
-  const leader = document.getElementById("leader"), leader2 = document.getElementById("leader2");
-  const chatEl = document.getElementById("chat"), inpChat = document.getElementById("inpChat"), btnChat = document.getElementById("btnChat");
-  const inpName = document.getElementById("inpName"), btnSetName = document.getElementById("btnSetName"), chkReady = document.getElementById("chkReady");
-  const secondsLeftEl = document.getElementById("secondsLeft"), maskedEl = document.getElementById("masked"),
-        drawerNameEl = document.getElementById("drawerName"), roundIndexEl = document.getElementById("roundIndex"),
-        correctListEl = document.getElementById("correctList"),
-        leftLobbyBody = document.getElementById("lobbyBody"), leftRoundSidebar = document.getElementById("roundSidebar"),
-        timerEl = document.getElementById("timer");
+  const chatEl = document.getElementById("chat");
+  const inpChat = document.getElementById("inpChat");
+  const btnChat = document.getElementById("btnChat");
+  const holeInfo = document.getElementById("holeInfo");
+  const turnHeader = document.getElementById("turnHeader");
+  const miniScore = document.getElementById("miniScore");
+  const toast = document.getElementById("toast");
 
-  // ---- Canvas, tools, smoothing ----
-  const board = document.getElementById("board"); const ctx = board.getContext("2d", { willReadFrequently: true });
-  let drawing=false, penSize=6, penColor="#ffffff", tool="brush", bucketTolerance=24;
-  const penMinus = document.getElementById("penMinus"), penPlus = document.getElementById("penPlus"),
-        penSizeEl = document.getElementById("penSize"), penColorEl = document.getElementById("penColor"),
-        btnClear = document.getElementById("btnClear");
+  // Avatar & putter selectors
+  const avatars = ["🐸","🐼","🦊","🐵","🐹","🐨","🐔","🐙","🦄","🤖","👾","🐯"];
+  const putterColors = ["#ff6b6b","#ffd166","#4dd599","#6c77ff","#ff8ccf","#a0f","#0ff","#0fa05a"];
+  const avatarsEl = document.getElementById("avatars");
+  const puttersEl = document.getElementById("putters");
+  let selAvatar = avatars[0], selPutter = putterColors[0];
 
-  // tool buttons
-  document.querySelectorAll('.tool').forEach(b=>{
-    b.onclick = ()=>{ tool = b.dataset.tool; document.querySelectorAll('.tool').forEach(x=>x.classList.toggle('active', x===b)); };
+  avatars.forEach(av=>{
+    const b=document.createElement("div"); b.className="avatarOpt"; b.textContent=av;
+    b.onclick=()=>{ selAvatar=av; updateSelectors(); sendProfile(); };
+    avatarsEl.appendChild(b);
   });
-  document.querySelector('.tool[data-tool="brush"]').classList.add('active');
-
-  // Canvas sizing
-  function clearCanvas(){ ctx.save(); ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0); ctx.fillStyle="#070c18"; ctx.fillRect(0,0,board.clientWidth, board.clientHeight); ctx.restore(); }
-  function resize(){
-    board.width = Math.floor(board.clientWidth * devicePixelRatio);
-    board.height = Math.floor(board.clientHeight * devicePixelRatio);
-    ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
-    clearCanvas();
+  putterColors.forEach(c=>{
+    const d=document.createElement("div"); d.className="putter"; d.style.background=c;
+    d.onclick=()=>{ selPutter=c; updateSelectors(); sendProfile(); };
+    puttersEl.appendChild(d);
+  });
+  function updateSelectors(){
+    [...avatarsEl.children].forEach(n=>n.classList.toggle("active", n.textContent===selAvatar));
+    [...puttersEl.children].forEach(n=>n.classList.toggle("active", n.style.backgroundColor===hexToCss(selPutter)));
   }
-  new ResizeObserver(resize).observe(board);
-  window.addEventListener("load", resize);
+  function hexToCss(h){ const t=document.createElement('div'); t.style.color=h; document.body.appendChild(t); const c=getComputedStyle(t).color; t.remove(); return c; }
+  updateSelectors();
 
-  // UI actions
-  roomIdEl.textContent = room;
-  copyLinkBtn.onclick = async () => { await navigator.clipboard.writeText(location.href); alert("Link copied! Share this exact URL."); };
-  btnChat.onclick = ()=>{ const text=inpChat.value.trim(); if(!text) return; socket.emit("chat:send",{text}); inpChat.value=""; };
-  inpChat.addEventListener("keydown", e=>{ if(e.key==="Enter") btnChat.click(); });
-  btnSetName.onclick = ()=>{ const name=inpName.value.trim().slice(0,24); if(!name) return; socket.emit("player:setName",{name}); };
-  chkReady.onchange = ()=> socket.emit("player:ready",{ready: chkReady.checked});
+  btnSet.onclick = () => sendProfile();
+  function sendProfile(){
+    const name = (inpName.value||"").trim().slice(0,24) || inpName.placeholder || "Player";
+    socket.emit("player:set", { name, avatar: selAvatar, putter: selPutter });
+  }
+  chkReady.onchange = ()=> socket.emit("player:ready", { ready: chkReady.checked });
   btnStart.onclick = ()=> socket.emit("game:start");
-  btnAgain.onclick = ()=> socket.emit("play:again");
 
-  // Guessing
-  const guessInput = document.getElementById("guessInput");
-  guessInput.addEventListener("keydown", e=>{ if(e.key==="Enter"){ const text=guessInput.value.trim(); if(text) socket.emit("guess:submit",{text}); guessInput.value=""; } });
+  btnChat.onclick = ()=>{ const text=(inpChat.value||"").trim(); if(!text) return; socket.emit("chat:send",{text}); inpChat.value=""; };
+  inpChat.addEventListener("keydown", e=>{ if(e.key==="Enter") btnChat.click(); });
 
-  // Brush smoothing
-  let last = null;
-  function strokeTo(x,y,size,color,mode='source-over'){
-    ctx.save();
-    ctx.globalCompositeOperation = mode;
-    ctx.strokeStyle = color || "#fff";
-    ctx.lineWidth = size || 6;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.beginPath();
-    if(!last){ ctx.moveTo(x,y); ctx.lineTo(x,y); }
-    else {
-      const mx=(last.x+x)/2, my=(last.y+y)/2;
-      ctx.moveTo(last.x,last.y);
-      ctx.quadraticCurveTo(last.x,last.y,mx,my);
-      ctx.lineTo(x,y);
-    }
-    ctx.stroke();
-    ctx.restore();
-    last = {x,y};
+  // ----- CANVAS / GAME VIEW -----
+  const canvas = document.getElementById("course");
+  const ctx = canvas.getContext("2d");
+  function resize(){
+    canvas.width = canvas.clientWidth * devicePixelRatio;
+    canvas.height= canvas.clientHeight * devicePixelRatio;
+    ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+    draw();
   }
-  function strokeEnd(){ last=null; }
+  new ResizeObserver(resize).observe(canvas);
 
-  // Normalize coords so different screen sizes stay in sync
-  const norm = (x,y)=>({ nx: x/board.clientWidth, ny: y/board.clientHeight });
-  const denorm = (nx,ny)=>({ x: nx*board.clientWidth, y: ny*board.clientHeight });
+  let ball = { x: 140, y: 260, r: 8, vx:0, vy:0 };
+  let aiming = false, aimFrom = {x:0,y:0}, aimTo = {x:0,y:0}, powerPct = 0;
+  const powerLabel = document.getElementById("powerLabel");
 
-  // Drawer events
-  board.addEventListener("mousedown", e=>{
-    if(!amDrawer || state!=="drawing") return;
-    const {offsetX: x, offsetY: y} = e;
-    if (tool === 'bucket') {
-      bucketFillAt(x, y, penColor, bucketTolerance);
-      const {nx,ny} = norm(x,y);
-      socket.emit("draw:begin", { kind:"bucket", nx, ny, color: penColor, tol: bucketTolerance });
-      socket.emit("draw:end", {});
-      return;
+  canvas.addEventListener("mousedown", (e)=>{
+    if (state !== "playing" || me.id !== turnPlayerId) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left, y = e.clientY - rect.top;
+    const d = Math.hypot(x - ball.x, y - ball.y);
+    if (d <= 18) {
+      aiming = true; aimFrom = {x:ball.x, y:ball.y}; aimTo = {x,y};
     }
-    drawing = true;
-    const mode = (tool==='eraser') ? 'destination-out' : 'source-over';
-    strokeTo(x,y,penSize,penColor,mode);
-    const {nx,ny} = norm(x,y);
-    socket.emit("draw:begin", { kind:"stroke", nx, ny, size: penSize, color: penColor, tool });
   });
-  window.addEventListener("mousemove", e=>{
-    if(!drawing || !amDrawer) return;
-    const r = board.getBoundingClientRect();
-    const x = e.clientX - r.left, y = e.clientY - r.top;
-    const mode = (tool==='eraser') ? 'destination-out' : 'source-over';
-    strokeTo(x,y,penSize,penColor,mode);
-    const {nx,ny} = norm(x,y);
-    socket.emit("draw:move", { kind:"stroke", nx, ny, size: penSize, color: penColor, tool });
+  window.addEventListener("mousemove", (e)=>{
+    if (!aiming) return;
+    const rect = canvas.getBoundingClientRect();
+    aimTo = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    const v = { x: aimFrom.x - aimTo.x, y: aimFrom.y - aimTo.y };
+    powerPct = Math.min(100, Math.round(Math.min(1, Math.hypot(v.x,v.y)/150)*100));
+    powerLabel.textContent = `Power: ${powerPct}%`;
+    draw();
   });
   window.addEventListener("mouseup", ()=>{
-    if(!amDrawer) return;
-    if(drawing) socket.emit("draw:end",{});
-    drawing=false; strokeEnd();
-  });
-  btnClear.onclick = ()=>{ if(amDrawer){ clearCanvas(); strokeEnd(); } };
-  penMinus.onclick = ()=>{ penSize=Math.max(2,penSize-2); document.getElementById("penSize").textContent=penSize; };
-  penPlus.onclick  = ()=>{ penSize=Math.min(40,penSize+2); document.getElementById("penSize").textContent=penSize; };
-  document.getElementById("penColor").oninput = e=> penColor = e.target.value;
-
-  // Bucket fill (flood fill, tolerance)
-  function bucketFillAt(cx, cy, hex, tol=24){
-    // map to device pixels
-    const sx = Math.floor(cx * devicePixelRatio);
-    const sy = Math.floor(cy * devicePixelRatio);
-    const w = board.width, h = board.height;
-    const img = ctx.getImageData(0,0,board.clientWidth,board.clientHeight);
-    const data = img.data;
-    // target color
-    const idx = ( (Math.floor(cy)*img.width) + Math.floor(cx) ) * 4;
-    const tr = data[idx], tg = data[idx+1], tb = data[idx+2], ta = data[idx+3];
-    const newCol = hexToRGBA(hex);
-    if (colorsClose(tr,tg,tb,ta, newCol.r,newCol.g,newCol.b,255, tol)) return;
-
-    const stack = [[Math.floor(cx), Math.floor(cy)]];
-    const seen = new Uint8Array(img.width * img.height);
-
-    while(stack.length){
-      const [x,y] = stack.pop();
-      if (x<0||y<0||x>=img.width||y>=img.height) continue;
-      const i = (y*img.width + x);
-      if (seen[i]) continue;
-      const di = i*4;
-      const r=data[di], g=data[di+1], b=data[di+2], a=data[di+3];
-      if (!colorsClose(r,g,b,a, tr,tg,tb,ta, tol)) continue;
-      // set new color
-      data[di]=newCol.r; data[di+1]=newCol.g; data[di+2]=newCol.b; data[di+3]=255;
-      seen[i]=1;
-      stack.push([x+1,y],[x-1,y],[x,y+1],[x,y-1]);
+    if (!aiming) return;
+    // compute shot vector, clamp power
+    const v = { x: (aimFrom.x - aimTo.x), y: (aimFrom.y - aimTo.y) };
+    const len = Math.hypot(v.x,v.y);
+    if (len > 2) {
+      const scale = Math.min(1, len/150); // power cap
+      // convert to velocity-ish (server interprets)
+      const speed = 12 * scale;
+      const dirx = v.x / len, diry = v.y / len;
+      sfx.hit(scale);
+      socket.emit("shot:putt", { vx: dirx * speed, vy: diry * speed });
     }
-    ctx.putImageData(img,0,0);
+    aiming = false; powerPct = 0; powerLabel.textContent = `Power: 0%`;
+    draw();
+  });
+
+  function drawCourse(){
+    if (!hole) return;
+    // grass
+    ctx.fillStyle = "#0d6b29"; ctx.fillRect(0,0,canvas.clientWidth, canvas.clientHeight);
+    // fairway
+    ctx.fillStyle = "#16a34a"; ctx.fillRect(80,120,680,280);
+    // walls
+    ctx.fillStyle = "#143255";
+    hole.walls.forEach(([x,y,w,h])=> ctx.fillRect(x,y,w,h));
+    // cup
+    ctx.beginPath(); ctx.arc(hole.cup.x, hole.cup.y, hole.cup.r, 0, Math.PI*2);
+    ctx.fillStyle = "#0b0f1a"; ctx.fill();
+    ctx.beginPath(); ctx.arc(hole.cup.x, hole.cup.y, hole.cup.r-3, 0, Math.PI*2);
+    ctx.fillStyle = "#222"; ctx.fill();
+    // fun stripes
+    ctx.globalAlpha = 0.15; ctx.fillStyle="#fff";
+    for(let i=0;i<8;i++){ ctx.fillRect(90+i*80, 120, 40, 280); }
+    ctx.globalAlpha = 1;
   }
-  function hexToRGBA(hex){
-    const h = hex.replace('#','');
-    const r=parseInt(h.slice(0,2),16), g=parseInt(h.slice(2,4),16), b=parseInt(h.slice(4,6),16);
-    return {r,g,b,a:255};
+  function drawBall(){
+    // drop shadow
+    ctx.beginPath(); ctx.arc(ball.x+2, ball.y+3, ball.r, 0, Math.PI*2);
+    ctx.fillStyle="rgba(0,0,0,.35)"; ctx.fill();
+    // ball
+    ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI*2);
+    ctx.fillStyle="#fff"; ctx.fill(); ctx.strokeStyle="#cbd5e1"; ctx.lineWidth=1; ctx.stroke();
+    // putter preview if it's my turn & aiming
+    if (me.id === turnPlayerId && aiming){
+      // power arrow
+      const v = { x: aimFrom.x - aimTo.x, y: aimFrom.y - aimTo.y };
+      ctx.strokeStyle = "#ffd166"; ctx.lineWidth = 3; ctx.lineCap="round";
+      ctx.beginPath(); ctx.moveTo(ball.x, ball.y); ctx.lineTo(ball.x + v.x, ball.y + v.y); ctx.stroke();
+    }
   }
-  function colorsClose(r1,g1,b1,a1, r2,g2,b2,a2, tol){
-    return Math.abs(r1-r2)<=tol && Math.abs(g1-g2)<=tol && Math.abs(b1-b2)<=tol; // ignore alpha
+  function drawHUD(){
+    // nothing heavy yet
+  }
+  function draw(){
+    drawCourse(); drawBall(); drawHUD();
   }
 
-  // Remote draw handling (supports stroke & bucket; normalized coords)
-  socket.on("draw:begin", (p) => {
-    if (p.kind === "bucket") {
-      const {x,y} = denorm(p.nx, p.ny);
-      bucketFillAt(x, y, p.color, p.tol ?? 24);
-      return;
-    }
-    if (p.kind === "stroke") {
-      const {x,y} = denorm(p.nx, p.ny);
-      const mode = (p.tool==='eraser') ? 'destination-out' : 'source-over';
-      strokeTo(x,y,p.size,p.color,mode);
-    }
-  });
-  socket.on("draw:move", (p) => {
-    if (p.kind !== "stroke") return;
-    const {x,y} = denorm(p.nx, p.ny);
-    const mode = (p.tool==='eraser') ? 'destination-out' : 'source-over';
-    strokeTo(x,y,p.size,p.color,mode);
-  });
-  socket.on("draw:end", () => { strokeEnd(); });
-
-  // Room & flow
-  socket.on("room:joined", ({ roomId, playerId, hostId }) => {
+  // ----- SOCKET HANDLERS -----
+  socket.on("room:joined", ({ roomId, playerId, hostId })=>{
     me.id = playerId; me.hostId = hostId;
-    document.getElementById("inpName").value = "Player " + playerId.slice(0,4);
+    document.getElementById("holeInfo").textContent = "Hole — / Par —";
+    inpName.value = `Golfer ${playerId.slice(0,4)}`;
   });
 
-  socket.on("room:state", (payload) => {
-    state = payload.state; me.hostId = payload.hostId;
-    players = payload.players; leaderboard = payload.leaderboard || {};
-    drawerId = payload.drawerId; secondsLeft = payload.secondsLeft || 0;
-    masked = payload.masked || "";
-
-    amDrawer = (drawerId === me.id);
-
-    document.getElementById("drawerName")?.replaceChildren(document.createTextNode(players.find(p=>p.id===drawerId)?.name || "—"));
-    secondsLeftEl.textContent = secondsLeft;
-    timerEl.classList.toggle("low", secondsLeft <= 10 && state==="drawing");
-    maskedEl.textContent = masked.split("").join(" ");
-    roundIndexEl.textContent = payload.roundIndex;
-
-    const isLobby = state === "lobby";
-    leftLobbyBody.style.display = isLobby ? "" : "none";
-    leftRoundSidebar.style.display = isLobby ? "none" : "";
-    btnStart.style.display = (isLobby && me.id === me.hostId) ? "" : "none";
-    btnAgain.style.display = (state === "gameOver") ? "" : "none";
-    guessInput.disabled = amDrawer || state!=="drawing";
-
-    // Active players only (server filters)
+  socket.on("room:state", (p)=>{
+    state = p.state; players = p.players; holeIndex = p.holeIndex;
+    turnPlayerId = (p.players[p.turnIndex] || {}).id;
+    // lobby UI
     playersEl.innerHTML = "";
-    players.forEach(p=>{
+    p.players.forEach(pl=>{
       const li = document.createElement("li");
-      const dot = `<span class="readyDot ${p.ready?'':'notready'}"></span>`;
-      li.innerHTML = `${dot} ${escapeHTML(p.name)} ${p.id===me.hostId?'<span class="chip">Host</span>':''}`;
+      li.innerHTML = `${pl.avatar} <strong>${escape(pl.name)}</strong> ${pl.id===p.hostId?'<span class="chip">Host</span>':''} ${pl.ready?'<span class="chip ready">Ready</span>':''}`;
       playersEl.appendChild(li);
     });
-
-    renderLeaderboard(leader);
-    renderLeaderboard(leader2);
+    btnStart.style.display = (state==="lobby" && me.id===p.hostId) ? "" : "none";
+    // turn label
+    const turnName = (p.players.find(x=>x.id===turnPlayerId)||{}).name || "—";
+    turnHeader.textContent = (state==="playing") ? `It's ${turnName}'s turn` : (state==="holeEnd"?"Hole Results":"Waiting…");
   });
 
-  socket.on("chat:new", ({ name, text }) => {
+  socket.on("chat:new", ({ name, avatar, text })=>{
     const div = document.createElement("div");
-    div.innerHTML = `<span style="color:#ffd166">${escapeHTML(name)}</span>: ${escapeHTML(text)}`;
+    div.innerHTML = `<span class="chip">${avatar}</span> <strong>${escape(name)}</strong>: ${escape(text)}`;
     chatEl.appendChild(div); chatEl.scrollTop = chatEl.scrollHeight;
   });
 
-  // Choices modal (drawer only)
-  const modalChoices = document.getElementById("modalChoices"), choiceList = document.getElementById("choiceList");
-  socket.on("round:choices", ({ choices }) => {
-    if (!amDrawer) return;
-    choiceList.innerHTML = "";
-    choices.forEach(w=>{
-      const b = document.createElement("div");
-      b.className = "choice";
-      b.textContent = w.toUpperCase();
-      b.onclick = () => { modalChoices.style.display="none"; socket.emit("drawer:chooseWord",{ word:w }); clearCanvas(); strokeEnd(); };
-      choiceList.appendChild(b);
+  socket.on("hole:start", ({ holeIndex: hi, hole: h })=>{
+    hole = h; ball.x = h.start.x; ball.y = h.start.y; ball.vx=ball.vy=0;
+    document.getElementById("holeInfo").textContent = `Hole ${hi+1} / Par ${h.par}`;
+    draw();
+    sfx.start(); musicStop(); musicStart();
+  });
+
+  socket.on("turn:begin", ({ playerId })=>{
+    turnPlayerId = playerId;
+    const p = players.find(x=>x.id===playerId);
+    turnHeader.textContent = `It's ${p ? p.name : '—'}'s turn`;
+    showToast(`${p ? p.name : 'Player'} to putt!`);
+    sfx.turn();
+  });
+
+  socket.on("ball:update", ({ x,y,vx,vy })=>{
+    ball.x = x; ball.y = y; ball.vx=vx; ball.vy=vy;
+    draw();
+  });
+
+  socket.on("fx:bonk", ()=> sfx.bonk());
+  socket.on("fx:cup", ()=> sfx.cup());
+  socket.on("fx:limit", ()=> sfx.limit());
+
+  socket.on("hole:end", ({ holeIndex: hi, par, results })=>{
+    musicStop();
+    // tiny scorecard (right panel)
+    miniScore.innerHTML = "";
+    (results||[]).sort((a,b)=>a.total-b.total).forEach(r=>{
+      const row = document.createElement("div");
+      row.className = "row";
+      const name = (players.find(p=>p.id===r.id)||{}).name || r.name || r.id.slice(0,4);
+      row.innerHTML = `<span ${r.id===me.id?'class="me"':''}>${escape(name)}</span><span>Hole: ${r.strokes || '-'} | Total: ${r.total}</span>`;
+      miniScore.appendChild(row);
     });
-    modalChoices.style.display = "grid";
+    showToast(`Hole ${hi+1} done — Par ${par}`);
   });
 
-  // Round flow + SFX hooks
-  const modalRound = document.getElementById("modalRound");
-  const resWord = document.getElementById("resWord");
-  const resTop = document.getElementById("resTop");
-  const resList = document.getElementById("resList");
-
-  socket.on("round:start", ({ masked: m, secondsLeft: s }) => {
-    masked = m; secondsLeft = s; secondsLeftEl.textContent = s; timerEl.classList.remove("low");
-    maskedEl.textContent = masked.split("").join(" ");
-    correctSet.clear(); document.getElementById("correctList").innerHTML = "";
-    clearCanvas(); strokeEnd();
-    sfx.start();
+  socket.on("game:over", ({ leaderboard })=>{
+    musicStop();
+    showToast("Game Over! Thanks for playing ❤️");
   });
 
-  socket.on("tick", ({ secondsLeft: s, masked: m }) => {
-    secondsLeft = s; secondsLeftEl.textContent = s;
-    if (s === 10) sfx.warn();
-    timerEl.classList.toggle("low", secondsLeft <= 10 && state==="drawing");
-    if (m) { masked = m; maskedEl.textContent = masked.split("").join(" "); }
-  });
+  // ----- UTILS -----
+  function escape(s){ return (s+"").replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;' }[m])); }
+  function showToast(t){ toast.textContent=t; toast.style.display="block"; setTimeout(()=>toast.style.display="none", 1800); }
 
-  socket.on("hint:reveal", ({ masked: m }) => {
-    masked = m; maskedEl.textContent = masked.split("").join(" ");
-  });
-
-  socket.on("guess:correct", ({ playerId, name }) => {
-    const chip = document.createElement("span");
-    chip.className = "chip"; chip.textContent = name;
-    document.getElementById("correctList").appendChild(chip);
-    sfx.correct();
-  });
-
-  socket.on("round:end", ({ word, perPlayer, leaderboard: lb, best }) => {
-    sfx.end();
-    leaderboard = lb || leaderboard;
-    renderLeaderboard(leader); renderLeaderboard(leader2);
-
-    // Round modal
-    resWord.textContent = word || "—";
-    resTop.textContent = best ? `${best.name || '—'} (+${best.points} pts)` : "—";
-    resList.innerHTML = "";
-    (perPlayer || []).sort((a,b)=>b.points-a.points).forEach(p=>{
-      const li = document.createElement("li");
-      li.innerHTML = `<span>${escapeHTML(players.find(x=>x.id===p.id)?.name || p.name || p.id.slice(0,5))}</span><strong>+${p.points}</strong>`;
-      resList.appendChild(li);
-    });
-    modalRound.style.display = "grid";
-    setTimeout(()=>{ modalRound.style.display = "none"; }, 3000);
-  });
-
-  const modalOver = document.getElementById("modalOver");
-  const winnerName = document.getElementById("winnerName");
-  const finalBoard = document.getElementById("finalBoard");
-  const btnAgainModal = document.getElementById("btnAgainModal");
-  btnAgainModal.onclick = ()=>{ socket.emit("play:again"); modalOver.style.display="none"; };
-
-  socket.on("game:over", ({ leaderboard: lb }) => {
-    let topId=null, topScore=-1;
-    Object.entries(lb).forEach(([id,score])=>{ if(score>topScore){ topScore=score; topId=id; } });
-    const pname = players.find(p=>p.id===topId)?.name || "—";
-    winnerName.textContent = `${pname} (${topScore} pts)`;
-    finalBoard.innerHTML = "";
-    Object.entries(lb).sort((a,b)=>b[1]-a[1]).forEach(([id,score])=>{
-      const li=document.createElement("li");
-      const name=players.find(p=>p.id===id)?.name || id.slice(0,5);
-      li.innerHTML = `<span>${escapeHTML(name)}</span><strong>${score}</strong>`;
-      finalBoard.appendChild(li);
-    });
-    modalOver.style.display="grid";
-  });
-
-  // Utils
-  function renderLeaderboard(el){
-    el.innerHTML = "";
-    Object.entries(leaderboard).sort((a,b)=>b[1]-a[1]).forEach(([id,score])=>{
-      const li=document.createElement("li");
-      const name=players.find(p=>p.id===id)?.name || id.slice(0,5);
-      li.innerHTML = `<span>${escapeHTML(name)}</span><strong>${score}</strong>`;
-      el.appendChild(li);
-    });
-  }
-  const escapeHTML = s=>(s+"").replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  // initial paint
+  resize();
 })();
 </script>
 </body>
