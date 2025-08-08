@@ -1,12 +1,11 @@
 {
-  "name": "draw-guess",
+  "name": "minigolf-party",
   "version": "1.0.0",
-  "description": "Multiplayer drawing & guessing game",
-  "main": "server.js",
+  "description": "Multiplayer HTML5 Minigolf",
   "type": "module",
+  "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "postinstall": "echo Ready"
+    "start": "node server.js"
   },
   "dependencies": {
     "express": "^4.19.2",
