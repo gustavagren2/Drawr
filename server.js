@@ -90,24 +90,39 @@ io.on("connection", (socket)=>{
     io.to(r.id).emit("chat:new", { name: player.name, text: msg, ts: Date.now() });
   });
 
-  // host starts
-  socket.on("game:start", ()=>{
-    if(player.id!==r.hostId || r.state!=="lobby") return;
-    const ps = activePlayers(r);
-    if(ps.length<1) return;
-    if(!ps.every(p=>p.ready)) return;
-    r.state = "flying";
-    // spawn spread
-    let angle=0;
-    for(const p of ps){
-      p.x = Math.cos(angle)*200; p.z = Math.sin(angle)*200; p.y = 200 + (Math.random()*40-20);
-      p.qx = 0; p.qy = Math.sin(angle*0.5); p.qz = 0; p.qw = Math.cos(angle*0.5);
-      p.s = 30;
-      angle += (Math.PI*2)/Math.max(ps.length,1);
-    }
-    io.to(r.id).emit("game:start");
-    broadcastRoom(r);
-  });
+ // ... top is unchanged ...
+socket.on("game:start", ()=>{
+  if(player.id!==r.hostId || r.state!=="lobby") return;
+  const ps = activePlayers(r);
+  if(ps.length<1) return;
+  if(!ps.every(p=>p.ready)) return;
+
+  r.state = "flying";
+
+  // ===== Wide runway lineup =====
+  // Runway runs along +X. Spawn in one row across Z (side-by-side), slightly above ground.
+  const startX = -500;              // far end of runway
+  const startY = 8;                 // just above the tarmac
+  const spacingZ = 20;              // distance between planes across runway
+  const total = ps.length;
+  const startZ = -( (total-1) * spacingZ ) / 2;
+
+  for (let i=0;i<ps.length;i++){
+    const p = ps[i];
+    p.x = startX;
+    p.y = startY;
+    p.z = startZ + i*spacingZ;
+
+    // Facing +X (identity yaw). Quaternion (0,0,0,1)
+    p.qx = 0; p.qy = 0; p.qz = 0; p.qw = 1;
+    p.s  = 25; // gentle taxi speed; players can boost
+  }
+
+  io.to(r.id).emit("game:start");
+  broadcastRoom(r);
+});
+// ... rest unchanged ...
+
 
   // state updates from clients (quantized to reduce spam)
   // We accept client-reported transform for MVP; server just relays to others.
