@@ -5,36 +5,44 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Draw & Guess – Multiplayer</title>
 <style>
-  :root { --bg:#0b0f1a; --panel:#0f1528; --panel2:#0b1120; --ink:#e8eefc; --brand:#7ab8ff; }
+  :root { --bg:#0b0f1a; --panel:#0f1528; --panel2:#0b1120; --ink:#e8eefc; --brand:#7ab8ff; --accent:#56ffa9; --warn:#ffd166; }
   html, body { margin:0; height:100%; background:var(--bg); color:var(--ink); font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; }
   .wrap { display:grid; grid-template-rows:auto 1fr; height:100%; }
   header { display:flex; gap:12px; align-items:center; padding:10px 12px; background:linear-gradient(180deg,#0e1430,#0a0f22); border-bottom:1px solid rgba(150,180,255,.2); }
-  header .title { font-weight:700; }
+  header .title { font-weight:800; }
   header .room { margin-left:auto; font-size:13px; opacity:.9; }
-  header .btn { margin-left:8px; padding:6px 10px; background:#0e1540; border:1px solid rgba(150,180,255,.3); border-radius:8px; color:var(--ink); cursor:pointer; }
+  header .btn { margin-left:8px; padding:6px 10px; background:#0e1540; border:1px solid rgba(150,180,255,.3); border-radius:8px; color:var(--ink); cursor:pointer; transition:transform .08s; }
+  header .btn:active { transform:scale(0.98); }
   main { display:grid; grid-template-columns:320px 1fr 320px; gap:12px; padding:12px; }
-  .panel { background:var(--panel); border:1px solid rgba(150,180,255,.18); border-radius:10px; overflow:hidden; display:flex; flex-direction:column; }
+  .panel { background:var(--panel); border:1px solid rgba(150,180,255,.18); border-radius:12px; overflow:hidden; display:flex; flex-direction:column; box-shadow:0 8px 30px rgba(0,0,0,.25); }
   .panel header { padding:8px 10px; background:var(--panel2); border-bottom:1px solid rgba(150,180,255,.18); }
   .panel .body { padding:10px; flex:1; overflow:auto; }
-  .panel .foot { padding:10px; border-top:1px solid rgba(150,180,255,.18); display:flex; gap:8px; }
-  .input { border-radius:8px; border:1px solid rgba(150,180,255,.3); background:#0b1022; color:var(--ink); padding:8px 10px; }
-  .row { display:flex; gap:8px; align-items:center; }
+  .panel .foot { padding:10px; border-top:1px solid rgba(150,180,255,.18); display:flex; gap:8px; align-items:center; }
+  .input { border-radius:10px; border:1px solid rgba(150,180,255,.3); background:#0b1022; color:var(--ink); padding:8px 10px; }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
   .list { list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:6px; }
-  .chip { padding:4px 8px; background:#0c1228; border:1px solid rgba(150,180,255,.2); border-radius:6px; display:inline-flex; gap:6px; align-items:center; }
-  .ready { width:8px; height:8px; border-radius:50%; background:#5fff87; display:inline-block; }
-  .notready { background:#666; }
-  .canvasWrap { background:var(--panel); border:1px solid rgba(150,180,255,.18); border-radius:10px; display:grid; grid-template-rows:auto 1fr auto; overflow:hidden; }
+  .chip { padding:4px 8px; background:#0c1228; border:1px solid rgba(150,180,255,.2); border-radius:999px; display:inline-flex; gap:6px; align-items:center; }
+  .readyDot { width:10px; height:10px; border-radius:50%; background:#5fff87; display:inline-block; box-shadow:0 0 10px rgba(95,255,135,.6); }
+  .notready { background:#666; box-shadow:none; }
+  .canvasWrap { background:var(--panel); border:1px solid rgba(150,180,255,.18); border-radius:12px; display:grid; grid-template-rows:auto 1fr auto; overflow:hidden; box-shadow:0 8px 30px rgba(0,0,0,.25); }
   .toolbar { display:flex; gap:8px; padding:8px; background:var(--panel2); border-bottom:1px solid rgba(150,180,255,.18); align-items:center; }
-  #board { background:#0a0f1e; display:block; width:100%; height:100%; }
+  #board { background:#070c18; display:block; width:100%; height:100%; cursor: crosshair; }
   .slots { font-size:20px; text-align:center; padding:8px; background:#0b1120; border-top:1px solid rgba(150,180,255,.2); }
-  .timer { font-weight:700; }
+  .timer { font-weight:800; transition: transform .2s; }
+  .timer.low { color:var(--warn); transform: scale(1.1); }
   .mask { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; letter-spacing: 2px; }
   .choices { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
-  .choice { padding:8px 10px; background:#162044; border:1px solid rgba(150,180,255,.35); border-radius:8px; cursor:pointer; }
+  .choice { padding:10px 12px; background:#162044; border:1px solid rgba(150,180,255,.35); border-radius:10px; cursor:pointer; transition: transform .08s; }
+  .choice:hover { transform: translateY(-1px); }
   .leader li { display:flex; justify-content:space-between; gap:10px; }
   .correctList { display:flex; gap:6px; flex-wrap:wrap; }
   .modal { position:fixed; inset:0; display:none; place-items:center; background:rgba(0,0,0,.55); }
-  .modal .card { width:min(520px, calc(100vw - 32px)); background:var(--panel); border:1px solid rgba(150,180,255,.28); border-radius:12px; padding:16px; }
+  .modal .card { width:min(560px, calc(100vw - 32px)); background:var(--panel); border:1px solid rgba(150,180,255,.28); border-radius:14px; padding:16px; box-shadow:0 20px 60px rgba(0,0,0,.4); }
+  .grow { animation: grow .25s ease-out; }
+  @keyframes grow { from { transform: scale(.95); opacity:.7 } to { transform: scale(1); opacity:1 } }
+  .pop { animation: pop .2s ease-out; }
+  @keyframes pop { from { transform: scale(.8); } to { transform: scale(1); } }
+  .confetti { position:fixed; pointer-events:none; inset:0; overflow:hidden; }
 </style>
 </head>
 <body>
@@ -69,7 +77,7 @@
       <div class="body" id="roundSidebar" style="display:none;">
         <div class="row" style="justify-content:space-between;">
           <div><strong>Round</strong> <span id="roundIndex">1</span></div>
-          <div class="timer">⏱ <span id="secondsLeft">60</span>s</div>
+          <div class="timer" id="timer">⏱ <span id="secondsLeft">60</span>s</div>
         </div>
         <div style="margin-top:10px;">Word: <span class="mask" id="masked">_ _ _ _</span></div>
         <div style="margin-top:12px;"><strong>Correct guessers</strong></div>
@@ -99,30 +107,41 @@
   </main>
 </div>
 
-<div class="modal" id="modalChoices"><div class="card"><h3>Choose a word to draw (60s)</h3><div class="choices" id="choiceList"></div></div></div>
-<div class="modal" id="modalOver"><div class="card"><h2>Game Over 🎉</h2><p>Winner: <strong id="winnerName">—</strong></p><ul id="finalBoard" class="list leader" style="margin-top:8px;"></ul><div style="margin-top:12px;"><button id="btnAgainModal" class="btn">Play again</button></div></div></div>
+<!-- Drawer word choices -->
+<div class="modal" id="modalChoices"><div class="card grow"><h3>Choose a word to draw (60s)</h3><div class="choices" id="choiceList"></div></div></div>
+
+<!-- Round results -->
+<div class="modal" id="modalRound"><div class="card grow">
+  <h3>Round Results</h3>
+  <p>Word: <strong id="resWord">—</strong></p>
+  <p>Top scorer: <strong id="resTop">—</strong></p>
+  <ul id="resList" class="list leader" style="margin-top:8px;"></ul>
+</div></div>
+
+<!-- Game Over -->
+<div class="modal" id="modalOver"><div class="card grow">
+  <h2>Game Over 🎉</h2>
+  <p>Winner: <strong id="winnerName">—</strong></p>
+  <ul id="finalBoard" class="list leader" style="margin-top:8px;"></ul>
+  <div style="margin-top:12px;"><button id="btnAgainModal" class="btn">Play again</button></div>
+</div></div>
+
+<canvas id="fx" class="confetti"></canvas>
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
 (() => {
-  // Default everyone into the same room unless a ?room= is present
+  // Default room
   const urlParams = new URLSearchParams(location.search);
   let room = urlParams.get("room") || "party";
-  if (!urlParams.get("room")) {
-    urlParams.set("room", room);
-    history.replaceState(null, "", "?" + urlParams.toString());
-  }
+  if (!urlParams.get("room")) { urlParams.set("room", room); history.replaceState(null, "", "?" + urlParams.toString()); }
 
-  // Force WebSockets (helps on some hosts)
+  // Force WS (stable on Render)
   const socket = io({ query: { room }, transports: ["websocket"], upgrade: true });
-  socket.on("connect_error", (err) => console.warn("socket connect_error:", err.message));
-  socket.on("disconnect", (reason) => console.warn("socket disconnected:", reason));
 
-  // State
   let me={id:null, hostId:null}, players=[], leaderboard={}, state="lobby";
   let drawerId=null, amDrawer=false, secondsLeft=60, masked="", correctSet=new Set();
 
-  // UI refs
   const roomIdEl = document.getElementById("roomId");
   const copyLinkBtn = document.getElementById("copyLink");
   const btnStart = document.getElementById("btnStart");
@@ -134,10 +153,11 @@
   const secondsLeftEl = document.getElementById("secondsLeft"), maskedEl = document.getElementById("masked"),
         drawerNameEl = document.getElementById("drawerName"), roundIndexEl = document.getElementById("roundIndex"),
         correctListEl = document.getElementById("correctList"),
-        leftLobbyBody = document.getElementById("lobbyBody"), leftRoundSidebar = document.getElementById("roundSidebar");
+        leftLobbyBody = document.getElementById("lobbyBody"), leftRoundSidebar = document.getElementById("roundSidebar"),
+        timerEl = document.getElementById("timer");
 
-  // Canvas
   const board = document.getElementById("board"); const ctx = board.getContext("2d");
+  const fx = document.getElementById("fx"); const fxc = fx.getContext("2d");
   let drawing=false, penSize=6, penColor="#ffffff";
   const penMinus = document.getElementById("penMinus"), penPlus = document.getElementById("penPlus"),
         penSizeEl = document.getElementById("penSize"), penColorEl = document.getElementById("penColor"),
@@ -147,20 +167,26 @@
   const modalChoices = document.getElementById("modalChoices"); const choiceList = document.getElementById("choiceList");
   const modalOver = document.getElementById("modalOver"); const winnerName = document.getElementById("winnerName");
   const finalBoard = document.getElementById("finalBoard"); const btnAgainModal = document.getElementById("btnAgainModal");
+  const modalRound = document.getElementById("modalRound"); const resWord = document.getElementById("resWord");
+  const resTop = document.getElementById("resTop"); const resList = document.getElementById("resList");
 
-  // Canvas sizing & init
-  function clearCanvas(){ ctx.fillStyle="#0a0f1e"; ctx.fillRect(0,0,board.clientWidth, board.clientHeight); }
-  function resize(){ board.width = board.clientWidth * devicePixelRatio; board.height = board.clientHeight * devicePixelRatio; ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0); clearCanvas(); }
+  // Canvas sizing
+  function clearCanvas(){ ctx.fillStyle="#070c18"; ctx.fillRect(0,0,board.clientWidth, board.clientHeight); }
+  function resize(){
+    board.width = board.clientWidth * devicePixelRatio;
+    board.height = board.clientHeight * devicePixelRatio;
+    ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+    clearCanvas();
+    fx.width = innerWidth * devicePixelRatio; fx.height = innerHeight * devicePixelRatio;
+    fxc.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+  }
   new ResizeObserver(resize).observe(board);
-  // Force an initial paint (fixes a first-load blank on some browsers)
+  window.addEventListener("resize", ()=>{ fx.width=innerWidth*devicePixelRatio; fx.height=innerHeight*devicePixelRatio; });
   window.addEventListener("load", resize);
 
   // Lobby UI
   roomIdEl.textContent = room;
-  copyLinkBtn.onclick = async () => {
-    await navigator.clipboard.writeText(location.href);
-    alert("Link copied! Share this exact URL (including ?room=) to join the same room.");
-  };
+  copyLinkBtn.onclick = async () => { await navigator.clipboard.writeText(location.href); alert("Link copied! Share this exact URL."); };
 
   btnChat.onclick = ()=>{ const text=inpChat.value.trim(); if(!text) return; socket.emit("chat:send",{text}); inpChat.value=""; };
   inpChat.addEventListener("keydown", e=>{ if(e.key==="Enter") btnChat.click(); });
@@ -173,44 +199,66 @@
   // Guessing
   guessInput.addEventListener("keydown", e=>{ if(e.key==="Enter"){ const text=guessInput.value.trim(); if(text) socket.emit("guess:submit",{text}); guessInput.value=""; } });
 
-  // Drawing helpers
-  penMinus.onclick = ()=>{ penSize=Math.max(2,penSize-2); penSizeEl.textContent=penSize; };
-  penPlus.onclick = ()=>{ penSize=Math.min(40,penSize+2); penSizeEl.textContent=penSize; };
-  penColorEl.oninput = e=> penColor = e.target.value;
-  btnClear.onclick = ()=>{ if(amDrawer) clearCanvas(); };
-
-  function drawDot(x, y, size, color) {
-    ctx.fillStyle = color || "#fff";
+  // Brush smoothing (local + remote): keep last point, draw rounded strokes
+  let lastX=null, lastY=null;
+  function strokeTo(x,y,size,color){
+    ctx.strokeStyle = color || "#fff";
+    ctx.lineWidth = size || 6;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
     ctx.beginPath();
-    ctx.arc(x, y, size || 6, 0, Math.PI * 2);
-    ctx.fill();
+    if(lastX==null){ ctx.moveTo(x,y); ctx.lineTo(x,y); }
+    else {
+      // simple quadratic smoothing
+      const mx = (lastX + x) / 2, my = (lastY + y) / 2;
+      ctx.moveTo(lastX, lastY);
+      ctx.quadraticCurveTo(lastX, lastY, mx, my);
+      ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+    lastX = x; lastY = y;
+  }
+  function strokeEnd(){ lastX = lastY = null; }
+
+  // Throttle moves to ~60fps
+  let canSend = true;
+  function sendMove(x,y){
+    if(!canSend) return;
+    canSend = false;
+    socket.emit("draw:move", { x, y, size: penSize, color: penColor });
+    requestAnimationFrame(()=>{ canSend = true; });
   }
 
-  // Drawer draws; send size/color on every packet
+  // Drawer events
   board.addEventListener("mousedown", e=>{
     if(!amDrawer || state!=="drawing") return;
-    drawing=true; const {offsetX:x, offsetY:y}=e;
-    drawDot(x,y,penSize,penColor);
+    drawing=true;
+    const {offsetX:x, offsetY:y}=e;
+    strokeTo(x,y,penSize,penColor);
     socket.emit("draw:begin",{ x,y, size: penSize, color: penColor });
   });
   window.addEventListener("mousemove", e=>{
     if(!drawing || !amDrawer) return;
     const r = board.getBoundingClientRect(); const x=e.clientX-r.left, y=e.clientY-r.top;
-    drawDot(x,y,penSize,penColor);
-    socket.emit("draw:move",{ x,y, size: penSize, color: penColor });
+    strokeTo(x,y,penSize,penColor);
+    sendMove(x,y);
   });
   window.addEventListener("mouseup", ()=>{
     if(!amDrawer) return;
     if(drawing) socket.emit("draw:end",{});
-    drawing=false;
+    drawing=false; strokeEnd();
   });
+  btnClear.onclick = ()=>{ if(amDrawer){ clearCanvas(); strokeEnd(); } };
+  penMinus.onclick = ()=>{ penSize=Math.max(2,penSize-2); penSizeEl.textContent=penSize; };
+  penPlus.onclick = ()=>{ penSize=Math.min(40,penSize+2); penSizeEl.textContent=penSize; };
+  penColorEl.oninput = e=> penColor = e.target.value;
 
-  // Guessers render with remote size/color
-  socket.on("draw:begin", ({x,y,size,color}) => drawDot(x,y,size,color));
-  socket.on("draw:move",  ({x,y,size,color}) => drawDot(x,y,size,color));
-  socket.on("draw:end",   () => {});
+  // Remote drawer
+  socket.on("draw:begin", ({x,y,size,color}) => { strokeTo(x,y,size,color); });
+  socket.on("draw:move",  ({x,y,size,color}) => { strokeTo(x,y,size,color); });
+  socket.on("draw:end",   () => { strokeEnd(); });
 
-  // Sockets: room & flow
+  // Room & flow
   socket.on("room:joined", ({ roomId, playerId, hostId }) => {
     me.id = playerId; me.hostId = hostId;
     document.getElementById("inpName").value = "Player " + playerId.slice(0,4);
@@ -221,10 +269,12 @@
     players = payload.players; leaderboard = payload.leaderboard || {};
     drawerId = payload.drawerId; secondsLeft = payload.secondsLeft || 0;
     masked = payload.masked || "";
+
     amDrawer = (drawerId === me.id);
 
     drawerNameEl.textContent = players.find(p=>p.id===drawerId)?.name || "—";
     secondsLeftEl.textContent = secondsLeft;
+    timerEl.classList.toggle("low", secondsLeft <= 10 && state==="drawing");
     maskedEl.textContent = masked.split("").join(" ");
     roundIndexEl.textContent = payload.roundIndex;
 
@@ -235,11 +285,13 @@
     btnAgain.style.display = (state === "gameOver") ? "" : "none";
     guessInput.disabled = amDrawer || state!=="drawing";
 
+    // Only active players arrive here now
     playersEl.innerHTML = "";
     players.forEach(p=>{
       const li = document.createElement("li");
-      const dot = `<span class="${p.ready?'ready':'ready notready'}"></span>`;
+      const dot = `<span class="readyDot ${p.ready?'':'notready'}"></span>`;
       li.innerHTML = `${dot} ${escapeHTML(p.name)} ${p.id===me.hostId?'<span class="chip">Host</span>':''}`;
+      li.classList.add("grow");
       playersEl.appendChild(li);
     });
 
@@ -249,16 +301,18 @@
 
   socket.on("chat:new", ({ name, text }) => {
     const div = document.createElement("div");
-    div.innerHTML = `<span style="color:#ffd166">${escapeHTML(name)}</span>: ${escapeHTML(text)}`;
+    div.innerHTML = `<span style="color:#ffd166" class="pop">${escapeHTML(name)}</span>: ${escapeHTML(text)}`;
     chatEl.appendChild(div); chatEl.scrollTop = chatEl.scrollHeight;
   });
 
+  // Choices modal (drawer only)
   socket.on("round:choices", ({ choices }) => {
     if (!amDrawer) return;
     choiceList.innerHTML = "";
     choices.forEach(w=>{
       const b = document.createElement("div");
-      b.className = "choice"; b.textContent = w.toUpperCase();
+      b.className = "choice";
+      b.textContent = w.toUpperCase();
       b.onclick = () => { modalChoices.style.display="none"; socket.emit("drawer:chooseWord",{ word:w }); clearCanvas(); };
       choiceList.appendChild(b);
     });
@@ -266,13 +320,15 @@
   });
 
   socket.on("round:start", ({ masked: m, secondsLeft: s }) => {
-    masked = m; secondsLeft = s; maskedEl.textContent = masked.split("").join(" ");
-    correctSet.clear(); document.getElementById("correctList").innerHTML = "";
-    clearCanvas();
+    masked = m; secondsLeft = s; secondsLeftEl.textContent = s; timerEl.classList.remove("low");
+    maskedEl.textContent = masked.split("").join(" ");
+    correctSet.clear(); correctListEl.innerHTML = "";
+    clearCanvas(); strokeEnd();
   });
 
   socket.on("tick", ({ secondsLeft: s, masked: m }) => {
     secondsLeft = s; secondsLeftEl.textContent = s;
+    timerEl.classList.toggle("low", secondsLeft <= 10 && state==="drawing");
     if (m) { masked = m; maskedEl.textContent = masked.split("").join(" "); }
   });
 
@@ -281,32 +337,47 @@
   });
 
   socket.on("guess:correct", ({ playerId, name }) => {
-    correctSet.add(playerId);
     const chip = document.createElement("span");
-    chip.className = "chip"; chip.textContent = name;
+    chip.className = "chip pop"; chip.textContent = name;
     correctListEl.appendChild(chip);
   });
 
-  socket.on("round:end", ({ word }) => {
-    const div = document.createElement("div");
-    div.innerHTML = `<em>Round over. The word was <strong>${escapeHTML(word)}</strong>.</em>`;
-    chatEl.appendChild(div); chatEl.scrollTop = chatEl.scrollHeight;
+  // Round results popup with per-round points + confetti
+  socket.on("round:end", ({ word, perPlayer, leaderboard: lb, best }) => {
+    // Update boards
+    leaderboard = lb || leaderboard;
     renderLeaderboard(leader); renderLeaderboard(leader2);
+
+    // Round modal
+    resWord.textContent = word || "—";
+    resTop.textContent = best ? `${best.name || '—'} (+${best.points} pts)` : "—";
+    resList.innerHTML = "";
+    (perPlayer || []).sort((a,b)=>b.points-a.points).forEach(p=>{
+      const li = document.createElement("li");
+      li.innerHTML = `<span>${escapeHTML(players.find(x=>x.id===p.id)?.name || p.name || p.id.slice(0,5))}</span><strong>+${p.points}</strong>`;
+      resList.appendChild(li);
+    });
+    modalRound.style.display = "grid";
+
+    // confetti if drawer did great (>= 350)
+    if (best && best.points >= 350) confettiBurst();
+    setTimeout(()=>{ modalRound.style.display = "none"; }, 3200);
   });
 
   socket.on("game:over", ({ leaderboard: lb }) => {
     let topId=null, topScore=-1;
     Object.entries(lb).forEach(([id,score])=>{ if(score>topScore){ topScore=score; topId=id; } });
     const pname = players.find(p=>p.id===topId)?.name || "—";
-    document.getElementById("winnerName").textContent = `${pname} (${topScore} pts)`;
-    const finalBoard = document.getElementById("finalBoard"); finalBoard.innerHTML = "";
+    winnerName.textContent = `${pname} (${topScore} pts)`;
+    finalBoard.innerHTML = "";
     Object.entries(lb).sort((a,b)=>b[1]-a[1]).forEach(([id,score])=>{
       const li=document.createElement("li");
       const name=players.find(p=>p.id===id)?.name || id.slice(0,5);
       li.innerHTML = `<span>${escapeHTML(name)}</span><strong>${score}</strong>`;
       finalBoard.appendChild(li);
     });
-    document.getElementById("modalOver").style.display="grid";
+    modalOver.style.display="grid";
+    confettiBurst();
   });
 
   // Utils
@@ -320,6 +391,26 @@
     });
   }
   const escapeHTML = s=>(s+"").replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+
+  // Tiny confetti
+  function confettiBurst(){
+    const bits = Array.from({length: 80}, ()=>({
+      x: Math.random()*innerWidth, y: -20, vx:(Math.random()*2-1)*2, vy: 2+Math.random()*3,
+      w: 4+Math.random()*3, h: 8+Math.random()*6, r: Math.random()*Math.PI, vr: (Math.random()*2-1)*0.2,
+      c: `hsl(${Math.random()*360},90%,60%)`
+    }));
+    const t0 = performance.now();
+    function step(){
+      fxc.clearRect(0,0,innerWidth,innerHeight);
+      const t = performance.now()-t0;
+      for(const b of bits){
+        b.x+=b.vx; b.y+=b.vy; b.vy+=0.04; b.r+=b.vr;
+        fxc.save(); fxc.translate(b.x,b.y); fxc.rotate(b.r); fxc.fillStyle=b.c; fxc.fillRect(-b.w/2,-b.h/2,b.w,b.h); fxc.restore();
+      }
+      if (t < 1800) requestAnimationFrame(step); else fxc.clearRect(0,0,innerWidth,innerHeight);
+    }
+    step();
+  }
 })();
 </script>
 </body>
