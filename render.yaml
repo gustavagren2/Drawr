@@ -1,9 +1,10 @@
 services:
   - type: web
-    name: draw-guess
+    name: minigolf-game
     env: node
-    plan: free
     buildCommand: npm install
     startCommand: node server.js
-    autoDeploy: true
-    healthCheckPath: /health
+    plan: free
+    envVars:
+      - key: NODE_ENV
+        value: production
