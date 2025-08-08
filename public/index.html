@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>AirParty 3D</title>
+<title>AirParty 3D – Runway</title>
 <style>
   :root { --bg:#0b0f1a; --panel:#0e1530; --ink:#e8eefc; --brand:#7ab8ff; }
   html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial}
@@ -23,8 +23,6 @@
   #viewport{position:fixed;inset:0;display:none;background:#000}
   #hud{position:fixed;left:12px;bottom:12px;display:none;background:rgba(10,16,38,.6);border:1px solid rgba(150,180,255,.25);padding:8px 10px;border-radius:12px;font-size:13px}
   #fps{position:fixed;right:12px;bottom:12px;display:none;background:rgba(10,16,38,.6);border:1px solid rgba(150,180,255,.25);padding:6px 8px;border-radius:8px;font-size:12px}
-  #compass{position:fixed;left:50%;top:12px;translate:-50% 0;background:rgba(10,16,38,.6);border:1px solid rgba(150,180,255,.25);padding:6px 10px;border-radius:999px;font-size:13px;display:none}
-  #hint{position:fixed;left:50%;bottom:50%;translate:-50% 50%;font-size:14px;opacity:.75;display:none}
 </style>
 </head>
 <body>
@@ -42,7 +40,7 @@
       <div class="body">
         <div class="row">
           <input id="inpName" class="input" placeholder="Your name" style="flex:1"/>
-          <input id="inpColor" type="color" class="input" value="#7ab8ff" title="Plane color"/>
+          <input id="inpColor" type="color" class="input" value="#ffb347"/>
           <button id="btnSet" class="btn">Set</button>
           <label class="chip"><input type="checkbox" id="chkReady"> Ready</label>
         </div>
@@ -64,339 +62,278 @@
         <p>Controls:</p>
         <ul>
           <li>Arrow Up/Down — pitch</li>
-          <li>Arrow Left/Right — yaw (auto roll level)</li>
+          <li>Arrow Left/Right — yaw (auto level)</li>
           <li>Space — boost</li>
         </ul>
-        <p>Host starts when all are ready.</p>
+        <p>Host starts when all are ready. Spawns are side-by-side on a wide runway.</p>
       </div>
     </section>
     <section class="panel">
       <header>Tips</header>
       <div class="body">
-        <p>Performance: low-poly, fog, capped DPR, snapshots ~12 Hz with client interpolation.</p>
+        <p>Performance: low-poly, no shadows, capped DPR, snapshots ~12 Hz + interpolation.</p>
       </div>
     </section>
   </main>
 </div>
 
-<!-- Fullscreen 3D -->
 <div id="viewport"></div>
 <div id="hud">SPD <span id="spd">0</span> | ALT <span id="alt">0</span></div>
 <div id="fps">FPS —</div>
-<div id="compass">HDG <span id="hdg">000</span>° | <span id="card">N</span></div>
-<div id="hint">↑↓ pitch • ←→ yaw • SPACE boost</div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
 <script>
 (() => {
-  // ====== SOCKET / ROOM ======
+  // ===== SOCKET / LOBBY =====
   const url = new URL(location.href);
   const room = url.searchParams.get("room") || "airfield";
   if(!url.searchParams.get("room")){ url.searchParams.set("room", room); history.replaceState(null,"",url.toString()); }
   const socket = io({ query:{ room }, transports:["websocket"], upgrade:true });
 
-  let me={ id:null, hostId:null };
-  const roomIdEl = document.getElementById("roomId");
-  const btnStart = document.getElementById("btnStart");
-  const playersEl = document.getElementById("players");
-  const inpName = document.getElementById("inpName");
-  const inpColor = document.getElementById("inpColor");
-  const btnSet = document.getElementById("btnSet");
-  const chkReady = document.getElementById("chkReady");
-  const chatEl = document.getElementById("chat");
-  const inpChat = document.getElementById("inpChat");
-  const btnChat = document.getElementById("btnChat");
-  roomIdEl.textContent = room;
+  let me={id:null,hostId:null};
+  const roomIdEl=document.getElementById("roomId");
+  const btnStart=document.getElementById("btnStart");
+  const playersEl=document.getElementById("players");
+  const inpName=document.getElementById("inpName");
+  const inpColor=document.getElementById("inpColor");
+  const btnSet=document.getElementById("btnSet");
+  const chkReady=document.getElementById("chkReady");
+  const chatEl=document.getElementById("chat");
+  const inpChat=document.getElementById("inpChat");
+  const btnChat=document.getElementById("btnChat");
+  roomIdEl.textContent=room;
 
-  btnSet.onclick = ()=> socket.emit("player:set", { name:(inpName.value||"").slice(0,24), color: inpColor.value });
-  chkReady.onchange = ()=> socket.emit("player:ready", { ready: chkReady.checked });
-  btnChat.onclick = ()=>{ const text=(inpChat.value||"").trim(); if(!text) return; socket.emit("chat:send",{text}); inpChat.value=""; };
-  inpChat.addEventListener("keydown", e=>{ if(e.key==="Enter") btnChat.click(); });
-  btnStart.onclick = ()=> socket.emit("game:start");
+  btnSet.onclick=()=>socket.emit("player:set",{name:(inpName.value||"").slice(0,24),color:inpColor.value});
+  chkReady.onchange=()=>socket.emit("player:ready",{ready:chkReady.checked});
+  btnChat.onclick=()=>{const text=(inpChat.value||"").trim(); if(!text) return; socket.emit("chat:send",{text}); inpChat.value="";};
+  inpChat.addEventListener("keydown",e=>{if(e.key==="Enter") btnChat.click();});
+  btnStart.onclick=()=>socket.emit("game:start");
 
-  socket.on("room:joined", ({roomId,playerId,hostId})=>{
-    me.id = playerId; me.hostId = hostId;
-    inpName.value = "Pilot " + playerId.slice(0,4);
+  socket.on("room:joined",({playerId,hostId})=>{
+    me.id=playerId; me.hostId=hostId; inpName.value="Pilot "+playerId.slice(0,4);
   });
-  socket.on("room:state", (p)=>{
-    me.hostId = p.hostId;
-    playersEl.innerHTML = "";
+  socket.on("room:state",(p)=>{
+    me.hostId=p.hostId;
+    playersEl.innerHTML="";
     (p.players||[]).forEach(pl=>{
       const li=document.createElement("li");
-      li.innerHTML = `<span class="chip" style="background:${pl.color}"></span> <strong>${esc(pl.name)}</strong> ${pl.id===p.hostId?'<span class="chip">Host</span>':''} ${pl.ready?'<span class="chip">Ready</span>':''}`;
+      li.innerHTML=`<span class="chip" style="background:${pl.color}"></span> <strong>${esc(pl.name)}</strong> ${pl.id===p.hostId?'<span class="chip">Host</span>':''} ${pl.ready?'<span class="chip">Ready</span>':''}`;
       playersEl.appendChild(li);
     });
-    btnStart.style.display = (p.state==="lobby" && me.id===p.hostId) ? "" : "none";
+    btnStart.style.display=(p.state==="lobby" && me.id===p.hostId)?"":"none";
   });
-  socket.on("chat:new", ({name,text})=>{
-    const div=document.createElement("div");
-    div.innerHTML=`<strong>${esc(name)}:</strong> ${esc(text)}`;
-    chatEl.appendChild(div); chatEl.scrollTop = chatEl.scrollHeight;
+  socket.on("chat:new",({name,text})=>{
+    const div=document.createElement("div"); div.innerHTML=`<strong>${esc(name)}:</strong> ${esc(text)}`;
+    chatEl.appendChild(div); chatEl.scrollTop=chatEl.scrollHeight;
   });
-  socket.on("game:start", ()=> enterWorld());
+  socket.on("game:start",()=>enterWorld());
+  const esc=s=>(s+"").replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 
-  const esc = s => (s+"").replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
+  // ===== 3D WORLD =====
+  let renderer, scene, camera, clock, DPR=Math.min(1.5,devicePixelRatio||1);
+  const viewport=document.getElementById("viewport");
+  const hud=document.getElementById("hud");
+  const fpsEl=document.getElementById("fps");
+  const spdEl=document.getElementById("spd");
+  const altEl=document.getElementById("alt");
 
-  // ====== WORLD (THREE) ======
-  let renderer, scene, camera, clock;
-  let DPR = Math.min(1.5, devicePixelRatio||1);
-  const viewport = document.getElementById("viewport");
-  const hud = document.getElementById("hud");
-  const fpsEl = document.getElementById("fps");
-  const compassEl = document.getElementById("compass");
-  const hdgEl = document.getElementById("hdg");
-  const cardEl = document.getElementById("card");
-  const hintEl = document.getElementById("hint");
-  const spdEl = document.getElementById("spd");
-  const altEl = document.getElementById("alt");
+  let local={obj:null,color:"#ffb347",speed:25};
+  const peers=new Map(); // id -> {obj,last}
 
-  let local = { obj:null, color:"#7ab8ff", speed: 40, yaw:0, pitch:0, roll:0 };
-  const peers = new Map(); // id -> {obj,last}
-
-  const keys = { ArrowUp:false, ArrowDown:false, ArrowLeft:false, ArrowRight:false, Space:false };
-  window.addEventListener("keydown", (e)=>{ if(e.repeat) return; if(e.key in keys){ keys[e.key]=true; e.preventDefault(); } });
-  window.addEventListener("keyup",   (e)=>{ if(e.key in keys){ keys[e.key]=false; e.preventDefault(); } });
+  const keys={ArrowUp:false,ArrowDown:false,ArrowLeft:false,ArrowRight:false,Space:false};
+  addEventListener("keydown",e=>{if(e.repeat) return; if(e.key in keys){ keys[e.key]=true; e.preventDefault(); }});
+  addEventListener("keyup",e=>{if(e.key in keys){ keys[e.key]=false; e.preventDefault(); }});
 
   function enterWorld(){
     document.getElementById("lobbyScreen").style.display="none";
-    viewport.style.display="block"; hud.style.display="block"; fpsEl.style.display="block"; compassEl.style.display="block"; hintEl.style.display="block";
-    setTimeout(()=> hintEl.style.display="none", 4000);
+    viewport.style.display="block"; hud.style.display="block"; fpsEl.style.display="block";
 
-    renderer = new THREE.WebGLRenderer({ antialias:false, powerPreference:"high-performance" });
-    renderer.setPixelRatio(DPR);
-    renderer.setSize(innerWidth, innerHeight);
+    renderer=new THREE.WebGLRenderer({antialias:false,powerPreference:"high-performance"});
+    renderer.setPixelRatio(DPR); renderer.setSize(innerWidth,innerHeight);
     viewport.appendChild(renderer.domElement);
 
-    scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x06223f);
-    scene.fog = new THREE.FogExp2(0x06223f, 0.002);
+    scene=new THREE.Scene();
+    scene.background=new THREE.Color(0x87b5f5);
+    scene.fog=new THREE.FogExp2(0x87b5f5,0.0009);
 
-    camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 5000);
+    camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,0.1,8000);
 
-    // Lighting & sky
-    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-    const sun = new THREE.DirectionalLight(0xffffff, 0.8); sun.position.set(20,50,10); scene.add(sun);
+    // Lights
+    scene.add(new THREE.AmbientLight(0xffffff,0.7));
+    const sun=new THREE.DirectionalLight(0xffffff,0.8); sun.position.set(100,200,50); scene.add(sun);
 
-    // Orientation aids
-    addWorldOrientation(scene);
+    // Airport / Runway
+    buildRunwayScene(scene);
 
-    // My “cube plane”
-    local.color = inpColor.value || "#7ab8ff";
-    local.obj = makeCubePlane(local.color);
-    local.obj.position.set(0, 80, 0);
+    // Plane
+    local.color=inpColor.value||"#ffb347";
+    local.obj=makeCubePlane(local.color, /*scale*/0.6);  // smaller plane
     scene.add(local.obj);
 
-    // Camera follow boom
-    const rig = new THREE.Object3D();
-    local.obj.add(rig);
-    rig.add(camera);
-    camera.position.set(-0.2, 2.2, -10);
-    camera.lookAt(new THREE.Vector3(10,0,0)); // forward is +X
+    // Chase cam: fixed behind & above tail (relative to plane)
+    const boom=new THREE.Object3D(); local.obj.add(boom); boom.add(camera);
+    camera.position.set(-12, 3, 0); // behind along -X, slightly above
+    camera.lookAt(new THREE.Vector3(10,0,0)); // look toward nose
 
-    clock = new THREE.Clock();
+    clock=new THREE.Clock();
 
-    // Networking snapshots
-    socket.on("state:snapshot", (arr)=>{
-      const ids = new Set(arr.map(a=>a.id));
+    // Snapshots
+    socket.on("state:snapshot",(arr)=>{
+      const ids=new Set(arr.map(a=>a.id));
       for(const a of arr){
-        if(a.id===me.id) continue;
-        let o = peers.get(a.id);
-        if(!o){
-          const obj = makeCubePlane(a.color||"#7ab8ff");
-          scene.add(obj);
-          o = { obj, last:a };
-          peers.set(a.id, o);
-          obj.position.set(a.x,a.y,a.z);
-          obj.quaternion.set(a.qx,a.qy,a.qz,a.qw);
-        } else {
-          o.last = a;
+        if(a.id===me.id) { // server gives initial spawn; snap to it
+          local.obj.position.set(a.x,a.y,a.z);
+          local.obj.quaternion.set(a.qx,a.qy,a.qz,a.qw);
+          continue;
         }
+        let o=peers.get(a.id);
+        if(!o){
+          const obj=makeCubePlane(a.color||"#7ab8ff",0.6);
+          obj.position.set(a.x,a.y,a.z); obj.quaternion.set(a.qx,a.qy,a.qz,a.qw);
+          scene.add(obj); o={obj,last:a}; peers.set(a.id,o);
+        } else { o.last=a; }
       }
-      for(const [id,o] of peers){
-        if(!ids.has(id)){ scene.remove(o.obj); peers.delete(id); }
-      }
+      for(const [id,o] of peers){ if(!ids.has(id)){ scene.remove(o.obj); peers.delete(id); } }
     });
 
     tick();
   }
 
-  function makeCubePlane(color="#7ab8ff"){
-    const g = new THREE.Object3D();
-    const mat = new THREE.MeshStandardMaterial({ color, metalness:0.1, roughness:0.85 });
-
-    // body (cube)
-    const body = new THREE.Mesh(new THREE.BoxGeometry(3, 1, 1), mat); // X forward
-    g.add(body);
-
-    // wings (cubes)
-    const wing = new THREE.Mesh(new THREE.BoxGeometry(0.3, 6, 0.3), mat);
-    wing.position.set(0, 0, 0);
-    g.add(wing);
-
-    // tail (cube)
-    const tail = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1.8, 0.4), mat);
-    tail.position.set(-1.6, 0.6, 0);
-    g.add(tail);
-
-    // actuators (little cubes on wingtips + tail tip)
-    const actMat = new THREE.MeshStandardMaterial({ color:"#fff", roughness:0.6 });
-    const a1 = new THREE.Mesh(new THREE.BoxGeometry(0.25,0.25,0.25), actMat); a1.position.set(0, 3.2, 0); g.add(a1);
-    const a2 = new THREE.Mesh(new THREE.BoxGeometry(0.25,0.25,0.25), actMat); a2.position.set(0,-3.2, 0); g.add(a2);
-    const a3 = new THREE.Mesh(new THREE.BoxGeometry(0.25,0.25,0.25), actMat); a3.position.set(-2.2, 1.2, 0); g.add(a3);
-
-    // “propeller” cube in front
-    const prop = new THREE.Mesh(new THREE.BoxGeometry(0.15,1.2,0.15), new THREE.MeshStandardMaterial({color:"#eee"}));
-    prop.position.set(1.7,0,0);
-    g.add(prop);
-    g.userData.prop = prop;
-
+  function makeCubePlane(color="#ffb347", scale=1){
+    const g=new THREE.Object3D();
+    const mat=new THREE.MeshStandardMaterial({color,metalness:0.05,roughness:0.85});
+    // body (short & small)
+    const body=new THREE.Mesh(new THREE.BoxGeometry(2.2*scale,0.7*scale,0.7*scale),mat); g.add(body);
+    // wings
+    const wing=new THREE.Mesh(new THREE.BoxGeometry(0.25*scale,4.5*scale,0.25*scale),mat); g.add(wing);
+    // tailplane
+    const tail=new THREE.Mesh(new THREE.BoxGeometry(0.25*scale,1.2*scale,0.25*scale),mat); tail.position.set(-1.2*scale,0.45*scale,0); g.add(tail);
+    // actuators
+    const white=new THREE.MeshStandardMaterial({color:"#fff",roughness:0.6});
+    const a1=new THREE.Mesh(new THREE.BoxGeometry(0.2*scale,0.2*scale,0.2*scale),white); a1.position.set(0, 2.4*scale, 0); g.add(a1);
+    const a2=a1.clone(); a2.position.y*=-1; g.add(a2);
+    const a3=a1.clone(); a3.position.set(-1.6*scale,0.9*scale,0); g.add(a3);
+    // prop
+    const prop=new THREE.Mesh(new THREE.BoxGeometry(0.12*scale,0.9*scale,0.12*scale), new THREE.MeshStandardMaterial({color:"#eee"}));
+    prop.position.set(1.3*scale,0,0); g.add(prop); g.userData.prop=prop;
     return g;
   }
 
-  function addWorldOrientation(scene){
-    // Ground grid
-    const grid = new THREE.GridHelper(4000, 80, 0x1e90ff, 0x1e90ff);
-    grid.material.opacity = 0.15; grid.material.transparent = true;
-    scene.add(grid);
+  function buildRunwayScene(scene){
+    // Ground
+    const ground=new THREE.Mesh(new THREE.PlaneGeometry(6000,3000), new THREE.MeshPhongMaterial({color:0x2f7d32}));
+    ground.rotation.x = -Math.PI/2; ground.position.y=0; scene.add(ground);
 
-    // Axis beams at origin
-    const xBeam = new THREE.Mesh(new THREE.BoxGeometry(1000, 0.5, 0.5), new THREE.MeshBasicMaterial({color:0xff5555}));
-    xBeam.position.set(500, 0.25, 0); scene.add(xBeam); // +X (east)
-    const zBeam = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 1000), new THREE.MeshBasicMaterial({color:0x55ff55}));
-    zBeam.position.set(0, 0.25, 500); scene.add(zBeam); // +Z (south-ish for orientation)
-    const yBeam = new THREE.Mesh(new THREE.BoxGeometry(0.5, 400, 0.5), new THREE.MeshBasicMaterial({color:0xaaaaaa}));
-    yBeam.position.set(0, 200, 0); scene.add(yBeam);
+    // Runway (very wide)
+    const runway=new THREE.Mesh(new THREE.PlaneGeometry(4000,400), new THREE.MeshPhongMaterial({color:0x3b3b3b}));
+    runway.rotation.x=-Math.PI/2; runway.position.set(0,0.02,0); scene.add(runway);
 
-    // Cardinal pylons with labels
-    const pylons = [
-      { pos:[ 0, 0, -800], color:0x00bfff, label:'N' },
-      { pos:[ 800,0, 0],   color:0xff6b6b, label:'E' },
-      { pos:[ 0, 0, 800],  color:0x22c55e, label:'S' },
-      { pos:[-800,0, 0],   color:0xf59e0b, label:'W' },
-    ];
-    const textMat = new THREE.MeshBasicMaterial({color:0xffffff});
-    pylons.forEach(p=>{
-      const col = new THREE.Mesh(new THREE.BoxGeometry(20, 200, 20), new THREE.MeshStandardMaterial({color:p.color, roughness:1}));
-      col.position.set(p.pos[0], 100, p.pos[2]);
-      scene.add(col);
-      // label (simple billboard plane)
-      const label = new THREE.Mesh(new THREE.PlaneGeometry(60,60), new THREE.MeshBasicMaterial({color:0xffffff}));
-      label.position.set(p.pos[0], 240, p.pos[2]);
-      label.userData.billboard=true;
-      label.userData.text=p.label;
-      scene.add(label);
-      // tiny beacon light
-      const bulb = new THREE.Mesh(new THREE.SphereGeometry(6,8,8), new THREE.MeshBasicMaterial({color:p.color}));
-      bulb.position.set(p.pos[0], 210, p.pos[2]);
-      scene.add(bulb);
-    });
+    // Centerline & dash marks
+    const dashMat=new THREE.MeshBasicMaterial({color:0xffffff});
+    for(let x=-1800; x<=1800; x+=120){
+      const dash=new THREE.Mesh(new THREE.PlaneGeometry(40,4), dashMat);
+      dash.rotation.x=-Math.PI/2; dash.position.set(x,0.03,0);
+      scene.add(dash);
+    }
+
+    // Edge lights (cheap spheres)
+    const lightMat=new THREE.MeshBasicMaterial({color:0x66ccff});
+    for(let x=-1800; x<=1800; x+=150){
+      const L=new THREE.Mesh(new THREE.SphereGeometry(1.6,8,8), lightMat);
+      const R=L.clone();
+      L.position.set(x, 0.8, 190); R.position.set(x, 0.8, -190);
+      scene.add(L,R);
+    }
+
+    // Simple buildings
+    const box=(w,h,d,c,x,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d), new THREE.MeshLambertMaterial({color:c})); m.position.set(x,h/2,z); scene.add(m); };
+    box(120,60,120,0x99a7c0, -600,-380);
+    box(160,80,100,0xcbbba7, -900,  500);
+    box(90, 50, 90, 0xa1b8ff,  900,-520);
+
+    // Control tower (cylinder + cap)
+    const base=new THREE.Mesh(new THREE.CylinderGeometry(18,18,160,12), new THREE.MeshLambertMaterial({color:0xdad0c7}));
+    base.position.set(700,80,520); scene.add(base);
+    const cap=new THREE.Mesh(new THREE.CylinderGeometry(34,34,28,12), new THREE.MeshLambertMaterial({color:0x9fb3d1}));
+    cap.position.set(700,174,520); scene.add(cap);
   }
 
-  // Flight model (keyboard only)
-  let lastSend = 0;
+  // Flight (arrow keys + space), with auto roll level and ground clamp
+  let lastSend=0;
   function simulateLocal(dt){
-    // Inputs
-    const pitchIn = (keys.ArrowUp? 1:0) + (keys.ArrowDown? -1:0);  // Up = pitch up
-    const yawIn   = (keys.ArrowRight? 1:0) + (keys.ArrowLeft? -1:0);
-    const boost   = keys.Space? 1:0;
+    const obj=local.obj;
+    const pitch=(keys.ArrowUp? 1:0) + (keys.ArrowDown? -1:0);
+    const yaw  =(keys.ArrowRight?1:0) + (keys.ArrowLeft? -1:0);
+    const boost= keys.Space?1:0;
 
-    // Speeds
-    const accel = 25*boost - 8*(1-boost); // hold space to accelerate, otherwise gentle decay
+    // speed model
+    const accel = (boost?28:0) - 6*(boost?0.2:1);
     local.speed = THREE.MathUtils.clamp(local.speed + accel*dt, 10, 140);
 
-    // Apply orientation (roll auto-levels toward 0)
-    const obj = local.obj;
-    obj.rotateX(pitchIn * 0.9 * dt);   // pitch about local X (remember our +X is forward; but geometry is X-forward, so rotate Z/Y carefully)
-    obj.rotateY(yawIn   * 1.2 * dt);   // yaw about local Y
-    // Auto-level roll toward 0
-    const e = new THREE.Euler().setFromQuaternion(obj.quaternion, "ZYX");
-    obj.rotateZ(-e.z * 0.8 * dt);
+    // orient
+    obj.rotateX(pitch*0.9*dt);
+    obj.rotateY(yaw*1.2*dt);
+    // auto-level roll
+    const e=new THREE.Euler().setFromQuaternion(obj.quaternion,"ZYX");
+    obj.rotateZ(-e.z*0.85*dt);
 
-    // Move forward along +X
-    const forward = new THREE.Vector3(1,0,0).applyQuaternion(obj.quaternion);
-    obj.position.addScaledVector(forward, local.speed * dt);
+    // move along +X
+    const f=new THREE.Vector3(1,0,0).applyQuaternion(obj.quaternion);
+    obj.position.addScaledVector(f, local.speed*dt);
 
-    // Keep above “ground”
-    if(obj.position.y < 20) obj.position.y = 20;
+    // ground clamp
+    if(obj.position.y<2.4) obj.position.y=2.4;
 
-    // Spin prop
-    const prop = obj.userData.prop; if(prop) prop.rotation.x += dt*30;
+    // prop spin
+    const prop=obj.userData.prop; if(prop) prop.rotation.x += dt*35;
 
     // HUD
     spdEl.textContent = local.speed.toFixed(0);
-    altEl.textContent = Math.max(0, obj.position.y|0);
+    altEl.textContent = (obj.position.y|0);
 
-    // Compass
-    const eul = new THREE.Euler().setFromQuaternion(obj.quaternion, "YXZ");
-    let deg = THREE.MathUtils.radToDeg(eul.y); // heading
-    deg = (deg%360+360)%360;
-    hdgEl.textContent = deg.toFixed(0).padStart(3,'0');
-    cardEl.textContent = ['N','NE','E','SE','S','SW','W','NW'][Math.round(deg/45)%8];
-
-    // Send my state ~12 Hz
-    const now = performance.now();
-    if(now - lastSend > 80){
-      lastSend = now;
-      const q = obj.quaternion, p = obj.position;
-      socket.emit("state:update", {
-        x:+p.x.toFixed(2), y:+p.y.toFixed(2), z:+p.z.toFixed(2),
+    // send ~12 Hz
+    const now=performance.now();
+    if(now-lastSend>80){
+      lastSend=now; const q=obj.quaternion, p=obj.position;
+      socket.emit("state:update",{ x:+p.x.toFixed(2), y:+p.y.toFixed(2), z:+p.z.toFixed(2),
         qx:+q.x.toFixed(4), qy:+q.y.toFixed(4), qz:+q.z.toFixed(4), qw:+q.w.toFixed(4),
-        s:+local.speed.toFixed(1)
-      });
+        s:+local.speed.toFixed(1) });
     }
   }
 
   // Peer interpolation
-  const tmpQ = new THREE.Quaternion(), curQ = new THREE.Quaternion();
+  const tmpQ=new THREE.Quaternion(), curQ=new THREE.Quaternion();
   function simulatePeers(dt){
     for(const o of peers.values()){
       if(!o.last) continue;
-      const p = o.obj.position;
+      const p=o.obj.position;
       p.x += (o.last.x - p.x) * Math.min(1, dt*6);
       p.y += (o.last.y - p.y) * Math.min(1, dt*6);
       p.z += (o.last.z - p.z) * Math.min(1, dt*6);
-      tmpQ.set(o.last.qx, o.last.qy, o.last.qz, o.last.qw).normalize();
-      curQ.copy(o.obj.quaternion);
-      curQ.slerp(tmpQ, Math.min(1, dt*6));
+      tmpQ.set(o.last.qx,o.last.qy,o.last.qz,o.last.qw).normalize();
+      curQ.copy(o.obj.quaternion).slerp(tmpQ, Math.min(1, dt*6));
       o.obj.quaternion.copy(curQ);
-      const prop = o.obj.userData.prop; if(prop) prop.rotation.x += dt*30;
+      const prop=o.obj.userData.prop; if(prop) prop.rotation.x += dt*35;
     }
   }
 
-  // Billboard labels face camera
-  function updateBillboards(){
-    scene.traverse(obj=>{
-      if(obj.userData && obj.userData.billboard){
-        obj.lookAt(camera.position);
-      }
-    });
-  }
-
-  // Render loop + dynamic res
+  // Loop + dynamic res
   let frameCount=0, acc=0, fps=60;
   function tick(){
-    const dt = Math.min(0.05, (clock?clock.getDelta():0.016));
-    acc += dt; frameCount++;
-    if(acc>=1){ fps = frameCount; frameCount=0; acc=0; fpsEl.textContent = `FPS ${fps}`; }
-    if(fps < 45 && DPR > 1){ DPR = Math.max(1, DPR - 0.05); renderer.setPixelRatio(DPR); }
-    else if(fps > 70 && DPR < (devicePixelRatio||1)){ DPR = Math.min(devicePixelRatio||1, DPR + 0.05); renderer.setPixelRatio(DPR); }
+    const dt=Math.min(0.05,(clock?clock.getDelta():0.016));
+    acc+=dt; frameCount++; if(acc>=1){ fps=frameCount; frameCount=0; acc=0; fpsEl.textContent=`FPS ${fps}`; }
+    if(fps<45 && DPR>1){ DPR=Math.max(1,DPR-0.05); renderer.setPixelRatio(DPR); }
+    else if(fps>70 && DPR<(devicePixelRatio||1)){ DPR=Math.min(devicePixelRatio||1, DPR+0.05); renderer.setPixelRatio(DPR); }
 
-    if(local.obj){
-      simulateLocal(dt);
-      simulatePeers(dt);
-      updateBillboards();
-    }
-
-    renderer.render(scene, camera);
+    if(local.obj){ simulateLocal(dt); simulatePeers(dt); }
+    renderer.render(scene,camera);
     requestAnimationFrame(tick);
   }
 
-  // Resize
-  window.addEventListener("resize", ()=>{
-    if(!renderer) return;
-    renderer.setSize(innerWidth, innerHeight);
-    camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
+  addEventListener("resize",()=>{
+    if(!renderer) return; renderer.setSize(innerWidth,innerHeight);
+    camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix();
   });
 })();
 </script>
